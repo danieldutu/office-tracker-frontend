@@ -21,9 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { UserAvatar } from "@/components/UserAvatar";
-import { Search, UserPlus, Trash2, Edit, Download, Building2, Users as UsersIcon, UserCog, AlertTriangle } from "lucide-react";
+import { Search, UserPlus, Trash2, Edit, Download, Building2, Users as UsersIcon, UserCog, AlertTriangle, KeyRound } from "lucide-react";
 import { User, TeamHierarchyResponse } from "@/types";
-import { getUsers, getTeamHierarchy, createUser, createDelegation, getDelegations, revokeDelegation } from "@/lib/api";
+import { getUsers, getTeamHierarchy, createUser, createDelegation, getDelegations, revokeDelegation, resetUserPassword } from "@/lib/api";
 import { getRoleName, getRoleColor } from "@/lib/permissions";
 import { formatEmail } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -238,6 +238,33 @@ export default function Admin({ currentUser }: AdminProps) {
     }
   };
 
+  const handleResetPassword = async (user: User) => {
+    try {
+      const result = await resetUserPassword(user.id);
+      toast({
+        title: "Password Reset Successfully",
+        description: (
+          <div className="space-y-2">
+            <p>Password reset for <strong>{result.user.name}</strong></p>
+            <p className="font-mono bg-muted px-2 py-1 rounded text-sm">
+              New password: <strong>{result.defaultPassword}</strong>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Please share this password securely with the user
+            </p>
+          </div>
+        ),
+        duration: 10000, // Show for 10 seconds
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleResetStatistics = async () => {
     setIsSubmitting(true);
     try {
@@ -417,6 +444,14 @@ export default function Admin({ currentUser }: AdminProps) {
                           </td>
                           <td className="p-3">
                             <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleResetPassword(user)}
+                                title="Reset password to default"
+                              >
+                                <KeyRound className="h-4 w-4 text-blue-600" />
+                              </Button>
                               <Button variant="ghost" size="icon">
                                 <Edit className="h-4 w-4" />
                               </Button>

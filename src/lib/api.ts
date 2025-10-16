@@ -317,7 +317,7 @@ export const getDirectReports = async (userId: string): Promise<any> => {
 };
 
 // Office Capacity
-export const getOfficeCapacity = async (): Promise<{
+export const getOfficeCapacity = async (weekOffset: number = 0): Promise<{
   weekData: Array<{
     day: string;
     date: string;
@@ -333,10 +333,61 @@ export const getOfficeCapacity = async (): Promise<{
     capacity: number;
   }>;
 }> => {
-  const res = await fetch(`${API_BASE}/office-capacity`, {
+  const queryParams = new URLSearchParams();
+  if (weekOffset !== 0) {
+    queryParams.set("weekOffset", weekOffset.toString());
+  }
+
+  const url = `${API_BASE}/office-capacity${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  const res = await fetch(url, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch office capacity");
+  const result = await res.json();
+  return result.data || result;
+};
+
+// Password Management
+export const changePassword = async (data: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> => {
+  const res = await fetch(`${API_BASE}/users/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to change password");
+  }
+
+  const result = await res.json();
+  return result.data || result;
+};
+
+export const resetUserPassword = async (userId: string): Promise<{
+  message: string;
+  defaultPassword: string;
+  user: { id: string; name: string; email: string };
+}> => {
+  const res = await fetch(`${API_BASE}/users/${userId}/reset-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to reset password");
+  }
+
   const result = await res.json();
   return result.data || result;
 };

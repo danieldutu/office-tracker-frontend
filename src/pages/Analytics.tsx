@@ -12,11 +12,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, TrendingUp, Users, Calendar, Home, Building2, FileDown } from "lucide-react";
+import { Download, TrendingUp, Users, Calendar, Home, Building2, FileDown, CalendarPlus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { getAnalyticsOverview, getOccupancyData, getWeeklyPattern, getUsers, getMyTeam, getAttendance } from "@/lib/api";
-import { AttendanceStats, OccupancyData, WeeklyPattern, User } from "@/types";
-import { isTribeLead } from "@/lib/permissions";
+import { getAnalyticsOverview, getOccupancyData, getWeeklyPattern, getUsers, getMyTeam, getAttendance, allocateAttendance, createAttendance } from "@/lib/api";
+import { AttendanceStats, OccupancyData, WeeklyPattern, User, AttendanceStatus } from "@/types";
+import { isTribeLead, canAllocateAttendance } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -54,8 +62,16 @@ export default function Analytics({ currentUser }: AnalyticsProps) {
     attendanceRate: 0,
   });
 
+  // Booking state
+  const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false);
+  const [bookingDate, setBookingDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [bookingStatus, setBookingStatus] = useState<AttendanceStatus>("office");
+  const [bookingUser, setBookingUser] = useState<string>("");
+  const [isBooking, setIsBooking] = useState(false);
+
   const isTribeLeadUser = isTribeLead(currentUser);
   const isChapterLeadUser = currentUser.role === "CHAPTER_LEAD";
+  const canAllocate = canAllocateAttendance(currentUser);
 
   useEffect(() => {
     loadUsers();
@@ -210,6 +226,71 @@ export default function Analytics({ currentUser }: AnalyticsProps) {
     setStats(overview);
     setOccupancyData(occupancy);
     setWeeklyPattern(pattern);
+  };
+
+  const handleBookAttendance = async () => {
+    if (!bookingDate) {
+      toast({
+        title: "Error",
+        description: "Please select a date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If user can allocate and a team member is selected, use allocation
+    // Otherwise, book for themselves
+    if (canAllocate && bookingUser && bookingUser !== currentUser.id) {
+      // Allocate for team member
+      setIsBooking(true);
+      try {
+        await allocateAttendance({
+          userId: bookingUser,
+          date: bookingDate,
+          status: bookingStatus,
+        });
+        toast({
+          title: "Success",
+          description: "Attendance allocated successfully!",
+        });
+        setIsBookingDialogOpen(false);
+        // Reload analytics and personal stats
+        await Promise.all([loadAnalytics(), loadPersonalStats()]);
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to allocate attendance",
+          variant: "destructive",
+        });
+      } finally {
+        setIsBooking(false);
+      }
+    } else {
+      // Book for self
+      setIsBooking(true);
+      try {
+        await createAttendance({
+          userId: currentUser.id,
+          date: bookingDate,
+          status: bookingStatus,
+        });
+        toast({
+          title: "Success",
+          description: "Your attendance has been booked!",
+        });
+        setIsBookingDialogOpen(false);
+        // Reload analytics and personal stats
+        await Promise.all([loadAnalytics(), loadPersonalStats()]);
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to book attendance",
+          variant: "destructive",
+        });
+      } finally {
+        setIsBooking(false);
+      }
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -381,15 +462,98 @@ export default function Analytics({ currentUser }: AnalyticsProps) {
                 </div>
               )}
             </div>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleDownloadPDF}
-              disabled={isExporting}
-            >
-              <FileDown className="h-4 w-4" />
-              {isExporting ? "Generating..." : "Download Report"}
-            </Button>
+            <div className="flex gap-2">
+              <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="default" className="gap-2">
+                    <CalendarPlus className="h-4 w-4" />
+                    Book Future Date
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Book Future Attendance</DialogTitle>
+                    <DialogDescription>
+                      Schedule attendance for future dates
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    {canAllocate && (
+                      <div className="space-y-2">
+                        <Label htmlFor="booking-user">Book For</Label>
+                        <Select
+                          value={bookingUser}
+                          onValueChange={setBookingUser}
+                        >
+                          <SelectTrigger id="booking-user">
+                            <SelectValue placeholder="Select person" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={currentUser.id}>Myself</SelectItem>
+                            {isTribeLeadUser
+                              ? allUsers
+                                  .filter(u => u.id !== currentUser.id)
+                                  .map((user) => (
+                                    <SelectItem key={user.id} value={user.id}>
+                                      {user.name} ({user.role === "CHAPTER_LEAD" ? "Chapter Lead" : user.role === "TRIBE_LEAD" ? "Tribe Lead" : "Reporter"})
+                                    </SelectItem>
+                                  ))
+                              : teamMembers.map((member) => (
+                                  <SelectItem key={member.id} value={member.id}>
+                                    {member.name}
+                                  </SelectItem>
+                                ))
+                            }
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-date">Date</Label>
+                      <Input
+                        id="booking-date"
+                        type="date"
+                        value={bookingDate}
+                        onChange={(e) => setBookingDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="booking-status">Status</Label>
+                      <Select
+                        value={bookingStatus}
+                        onValueChange={(value) => setBookingStatus(value as AttendanceStatus)}
+                      >
+                        <SelectTrigger id="booking-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="office">Office</SelectItem>
+                          <SelectItem value="remote">Remote</SelectItem>
+                          <SelectItem value="absent">Absent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      onClick={handleBookAttendance}
+                      disabled={isBooking || !bookingDate || (canAllocate && !bookingUser)}
+                      className="w-full"
+                    >
+                      <CalendarPlus className="h-4 w-4 mr-2" />
+                      {isBooking ? "Booking..." : "Book Attendance"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={handleDownloadPDF}
+                disabled={isExporting}
+              >
+                <FileDown className="h-4 w-4" />
+                {isExporting ? "Generating..." : "Download Report"}
+              </Button>
+            </div>
           </div>
 
           {/* Date Range and View Mode Selector */}
@@ -433,7 +597,6 @@ export default function Analytics({ currentUser }: AnalyticsProps) {
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         min={startDate}
-                        max={format(new Date(), "yyyy-MM-dd")}
                       />
                     </div>
                   </>

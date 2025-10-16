@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, addDays } from "date-fns";
-import { Search, ChevronLeft, ChevronRight, Download, UserPlus, Building2, FileDown } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Download, UserPlus, Building2, FileDown, KeyRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UserAvatar } from "@/components/UserAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { User, AttendanceStatus, TeamMember } from "@/types";
-import { getMyTeam, allocateAttendance } from "@/lib/api";
+import { getMyTeam, allocateAttendance, resetUserPassword } from "@/lib/api";
 import { canAllocateAttendance, getRoleName, getRoleColor, isTribeLead, isReporter } from "@/lib/permissions";
 import { formatEmail } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,7 @@ export default function Team({ currentUser }: TeamProps) {
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<AttendanceStatus>("office");
   const [isAllocating, setIsAllocating] = useState(false);
+  const [isAllocateDialogOpen, setIsAllocateDialogOpen] = useState(false);
   const [chapterLeadName, setChapterLeadName] = useState("");
   const [teamsByChapterLead, setTeamsByChapterLead] = useState<any[]>([]);
   const [exportOption, setExportOption] = useState<string>("all");
@@ -138,9 +139,11 @@ export default function Team({ currentUser }: TeamProps) {
         },
       }));
 
+      // Reset form and close dialog
       setSelectedUser(null);
       setSelectedDate("");
       setSelectedStatus("office");
+      setIsAllocateDialogOpen(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -149,6 +152,33 @@ export default function Team({ currentUser }: TeamProps) {
       });
     } finally {
       setIsAllocating(false);
+    }
+  };
+
+  const handleResetPassword = async (member: TeamMember) => {
+    try {
+      const result = await resetUserPassword(member.id);
+      toast({
+        title: "Password Reset Successfully",
+        description: (
+          <div className="space-y-2">
+            <p>Password reset for <strong>{result.user.name}</strong></p>
+            <p className="font-mono bg-muted px-2 py-1 rounded text-sm">
+              New password: <strong>{result.defaultPassword}</strong>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Please share this password securely with the user
+            </p>
+          </div>
+        ),
+        duration: 10000, // Show for 10 seconds
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
     }
   };
 
@@ -428,7 +458,7 @@ export default function Team({ currentUser }: TeamProps) {
           </div>
           <div className="flex gap-2">
             {canAllocate && (
-              <Dialog>
+              <Dialog open={isAllocateDialogOpen} onOpenChange={setIsAllocateDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">
                     <UserPlus className="h-4 w-4" />
@@ -903,6 +933,7 @@ export default function Team({ currentUser }: TeamProps) {
                         <div className="text-xs text-muted-foreground font-normal">{dayNum}</div>
                       </th>
                     ))}
+                    {canAllocate && <th className="text-right p-3 font-semibold">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -936,6 +967,20 @@ export default function Team({ currentUser }: TeamProps) {
                           </td>
                         );
                       })}
+                      {canAllocate && (
+                        <td className="p-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleResetPassword(member)}
+                              title="Reset password to default"
+                            >
+                              <KeyRound className="h-4 w-4 text-blue-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Save, Upload } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Save, Upload, Lock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/UserAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { User, AttendanceRecord } from "@/types";
-import { updateUser, getAttendance } from "@/lib/api";
+import { updateUser, getAttendance, changePassword } from "@/lib/api";
 import { formatEmail } from "@/lib/utils";
 
 interface ProfileProps {
@@ -21,6 +21,12 @@ export default function Profile({ currentUser, onUpdate }: ProfileProps) {
   const [avatar, setAvatar] = useState(currentUser.avatar || "");
   const [isSaving, setIsSaving] = useState(false);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     loadHistory();
@@ -50,6 +56,39 @@ export default function Profile({ currentUser, onUpdate }: ProfileProps) {
       toast.error("Failed to update profile");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all password fields");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await changePassword({
+        currentPassword,
+        newPassword,
+      });
+      toast.success("Password changed successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to change password");
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -135,6 +174,68 @@ export default function Profile({ currentUser, onUpdate }: ProfileProps) {
             >
               <Save className="h-4 w-4 mr-2" />
               {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Change Password */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Change Password
+            </CardTitle>
+            <CardDescription>
+              Update your password to keep your account secure
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="currentPassword" className="text-sm font-medium">
+                Current Password
+              </label>
+              <Input
+                id="currentPassword"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="newPassword" className="text-sm font-medium">
+                New Password
+              </label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password (min 6 characters)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="confirmPassword" className="text-sm font-medium">
+                Confirm New Password
+              </label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+              />
+            </div>
+
+            <Button
+              onClick={handleChangePassword}
+              disabled={!currentPassword || !newPassword || !confirmPassword || isChangingPassword}
+              className="w-full md:w-auto"
+            >
+              <Lock className="h-4 w-4 mr-2" />
+              {isChangingPassword ? "Changing..." : "Change Password"}
             </Button>
           </CardContent>
         </Card>

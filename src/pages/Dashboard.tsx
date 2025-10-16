@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { format, startOfWeek, addDays } from "date-fns";
-import { Building2, Home, XCircle, TrendingUp, User as UserIcon, Info, CalendarCheck, AlertTriangle } from "lucide-react";
+import { format, startOfWeek, addDays, addWeeks } from "date-fns";
+import { Building2, Home, XCircle, TrendingUp, User as UserIcon, Info, CalendarCheck, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [teamInOffice, setTeamInOffice] = useState<User[]>([]);
   const [chapterLeadName, setChapterLeadName] = useState("");
   const [officeCapacity, setOfficeCapacity] = useState<any>(null);
+  const [capacityWeekOffset, setCapacityWeekOffset] = useState(0);
   const [monthlyStats, setMonthlyStats] = useState({
     officeDays: 0,
     remoteDays: 0,
@@ -48,7 +49,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     if (canViewCapacity) {
       loadOfficeCapacity();
     }
-  }, [currentUser.id]);
+  }, [currentUser.id, capacityWeekOffset]);
 
   const loadTodayStatus = async () => {
     const records = await getAttendance({
@@ -115,11 +116,35 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   const loadOfficeCapacity = async () => {
     try {
-      const data = await getOfficeCapacity();
+      const data = await getOfficeCapacity(capacityWeekOffset);
       setOfficeCapacity(data);
     } catch (error) {
       console.error("Error loading office capacity:", error);
     }
+  };
+
+  const handlePreviousWeek = () => {
+    setCapacityWeekOffset(capacityWeekOffset - 1);
+  };
+
+  const handleNextWeek = () => {
+    setCapacityWeekOffset(capacityWeekOffset + 1);
+  };
+
+  const handleToday = () => {
+    setCapacityWeekOffset(0);
+  };
+
+  // Calculate the displayed week date range
+  const getWeekDateRange = () => {
+    const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const targetWeekStart = addWeeks(currentWeekStart, capacityWeekOffset);
+    const targetWeekEnd = addDays(targetWeekStart, 4); // Friday
+    return {
+      start: targetWeekStart,
+      end: targetWeekEnd,
+      monthYear: format(targetWeekStart, "MMMM yyyy")
+    };
   };
 
   const loadMonthlyStats = async () => {
@@ -334,9 +359,44 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         {canViewCapacity && officeCapacity && (
           <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-background">
             <CardHeader>
+              <div className="flex items-center justify-between mb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToday}
+                  disabled={capacityWeekOffset === 0}
+                  className="text-sm"
+                >
+                  Today
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handlePreviousWeek}
+                    className="h-8 w-8"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-center min-w-[150px]">
+                    <div className="text-lg font-semibold">
+                      {getWeekDateRange().monthYear}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNextWeek}
+                    className="h-8 w-8"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="w-[72px]"></div>
+              </div>
               <CardTitle className="text-center text-2xl flex items-center justify-center gap-2">
                 <CalendarCheck className="h-6 w-6 text-green-600" />
-                Office Capacity This Week
+                Office Capacity {capacityWeekOffset === 0 ? "This Week" : ""}
               </CardTitle>
               <p className="text-center text-sm text-muted-foreground">
                 Real-time office occupancy to prevent overbooking
