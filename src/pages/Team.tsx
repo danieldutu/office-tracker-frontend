@@ -51,6 +51,9 @@ export default function Team({ currentUser }: TeamProps) {
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [showSelection, setShowSelection] = useState(false);
   const [isChapterLeadExportDialogOpen, setIsChapterLeadExportDialogOpen] = useState(false);
+  const [isReporterExportDialogOpen, setIsReporterExportDialogOpen] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  const [exportEndDate, setExportEndDate] = useState(format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd"));
   const { toast } = useToast();
 
   const canAllocate = canAllocateAttendance(currentUser);
@@ -179,11 +182,23 @@ export default function Team({ currentUser }: TeamProps) {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
   };
 
-  const generateCSV = (members: TeamMember[], filename: string) => {
-    const headers = ["Name", "Email", "Role", "Team", ...weekDays.map(({ day, dayNum }) => `${day} ${dayNum}`)];
+  const generateCSV = (members: TeamMember[], filename: string, startDate: string, endDate: string) => {
+    // Generate all dates between start and end
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dates: { dateStr: string; label: string }[] = [];
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push({
+        dateStr: format(d, "yyyy-MM-dd"),
+        label: format(d, "EEE d"),
+      });
+    }
+
+    const headers = ["Name", "Email", "Role", "Team", ...dates.map(d => d.label)];
 
     const rows = members.map((member) => {
-      const weekStatus = weekDays.map(({ dateStr }) => {
+      const dateStatuses = dates.map(({ dateStr }) => {
         const status = attendance[member.id]?.[dateStr];
         return status ? status : "-";
       });
@@ -193,7 +208,7 @@ export default function Team({ currentUser }: TeamProps) {
         member.email,
         member.role,
         member.teamName || "-",
-        ...weekStatus,
+        ...dateStatuses,
       ];
     });
 
@@ -250,12 +265,12 @@ export default function Team({ currentUser }: TeamProps) {
   };
 
   const handleChapterLeadExport = () => {
-    const weekStr = format(currentWeekStart, "yyyy-MM-dd");
+    const filenameDate = `${exportStartDate}_to_${exportEndDate}`;
 
     switch (exportOption) {
       case "all":
         // Export all team members in one file
-        generateCSV(teamMembers, `my-team-${weekStr}.csv`);
+        generateCSV(teamMembers, `my-team-${filenameDate}.csv`, exportStartDate, exportEndDate);
         toast({
           title: "Success",
           description: `${teamMembers.length} team members exported to CSV`,
@@ -274,8 +289,8 @@ export default function Team({ currentUser }: TeamProps) {
         }
         const selectedMembers = teamMembers.filter(m => selectedPeople.includes(m.id));
         selectedMembers.forEach((member) => {
-          const filename = `person-${member.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
-          generateCSV([member], filename);
+          const filename = `person-${member.name.replace(/\s+/g, "-")}-${filenameDate}.csv`;
+          generateCSV([member], filename, exportStartDate, exportEndDate);
         });
         toast({
           title: "Success",
@@ -293,18 +308,19 @@ export default function Team({ currentUser }: TeamProps) {
   };
 
   const handleExportCSV = () => {
-    const weekStr = format(currentWeekStart, "yyyy-MM-dd");
+    const filenameDate = `${exportStartDate}_to_${exportEndDate}`;
 
     // Reporter: Export own data only
     if (isReporter(currentUser)) {
       const reporterData = teamMembers.find(m => m.id === currentUser.id);
       if (reporterData) {
-        generateCSV([reporterData], `my-schedule-${weekStr}.csv`);
+        generateCSV([reporterData], `my-schedule-${filenameDate}.csv`, exportStartDate, exportEndDate);
         toast({
           title: "Success",
           description: "Your schedule exported to CSV",
         });
       }
+      setIsReporterExportDialogOpen(false);
       return;
     }
 
@@ -319,7 +335,7 @@ export default function Team({ currentUser }: TeamProps) {
     switch (exportOption) {
       case "all":
         // Export everyone in one file
-        generateCSV(teamMembers, `all-teams-${weekStr}.csv`);
+        generateCSV(teamMembers, `all-teams-${filenameDate}.csv`, exportStartDate, exportEndDate);
         toast({
           title: "Success",
           description: "All teams exported to CSV",
@@ -339,8 +355,8 @@ export default function Team({ currentUser }: TeamProps) {
         const selectedTeams = teamsByChapterLead.filter(t => selectedChapterLeads.includes(t.chapterLead.id));
         selectedTeams.forEach((team: any) => {
           const chapterLeadName = team.chapterLead?.name || "No-Lead";
-          const filename = `team-${chapterLeadName.replace(/\s+/g, "-")}-${weekStr}.csv`;
-          generateCSV(team.members, filename);
+          const filename = `team-${chapterLeadName.replace(/\s+/g, "-")}-${filenameDate}.csv`;
+          generateCSV(team.members, filename, exportStartDate, exportEndDate);
         });
         toast({
           title: "Success",
@@ -360,8 +376,8 @@ export default function Team({ currentUser }: TeamProps) {
         }
         const selectedMembers = teamMembers.filter(m => selectedPeople.includes(m.id));
         selectedMembers.forEach((member) => {
-          const filename = `person-${member.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
-          generateCSV([member], filename);
+          const filename = `person-${member.name.replace(/\s+/g, "-")}-${filenameDate}.csv`;
+          generateCSV([member], filename, exportStartDate, exportEndDate);
         });
         toast({
           title: "Success",
@@ -372,7 +388,7 @@ export default function Team({ currentUser }: TeamProps) {
       case "chapter-leads-only":
         // Export all chapter leads in one file
         const chapterLeads = teamMembers.filter(m => m.role === "CHAPTER_LEAD");
-        generateCSV(chapterLeads, `chapter-leads-${weekStr}.csv`);
+        generateCSV(chapterLeads, `chapter-leads-${filenameDate}.csv`, exportStartDate, exportEndDate);
         toast({
           title: "Success",
           description: `${chapterLeads.length} chapter leads exported to CSV`,
@@ -498,6 +514,28 @@ export default function Team({ currentUser }: TeamProps) {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
+                    {/* Date Range Selection */}
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                      <div className="space-y-2">
+                        <Label htmlFor="start-date-chapter">Start Date</Label>
+                        <Input
+                          id="start-date-chapter"
+                          type="date"
+                          value={exportStartDate}
+                          onChange={(e) => setExportStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="end-date-chapter">End Date</Label>
+                        <Input
+                          id="end-date-chapter"
+                          type="date"
+                          value={exportEndDate}
+                          onChange={(e) => setExportEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
                     <RadioGroup value={exportOption} onValueChange={handleExportOptionChange}>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="all" id="all-chapter" />
@@ -573,6 +611,28 @@ export default function Team({ currentUser }: TeamProps) {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
+                    {/* Date Range Selection */}
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                      <div className="space-y-2">
+                        <Label htmlFor="start-date-tribe">Start Date</Label>
+                        <Input
+                          id="start-date-tribe"
+                          type="date"
+                          value={exportStartDate}
+                          onChange={(e) => setExportStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="end-date-tribe">End Date</Label>
+                        <Input
+                          id="end-date-tribe"
+                          type="date"
+                          value={exportEndDate}
+                          onChange={(e) => setExportEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
                     <RadioGroup value={exportOption} onValueChange={handleExportOptionChange}>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="all" id="all" />
@@ -678,10 +738,50 @@ export default function Team({ currentUser }: TeamProps) {
                 </DialogContent>
               </Dialog>
             ) : (
-              <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
-                <Download className="h-4 w-4" />
-                Export CSV
-              </Button>
+              <Dialog open={isReporterExportDialogOpen} onOpenChange={setIsReporterExportDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Export My Schedule</DialogTitle>
+                    <DialogDescription>
+                      Select the date range to export your schedule
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    {/* Date Range Selection */}
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                      <div className="space-y-2">
+                        <Label htmlFor="start-date-reporter">Start Date</Label>
+                        <Input
+                          id="start-date-reporter"
+                          type="date"
+                          value={exportStartDate}
+                          onChange={(e) => setExportStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="end-date-reporter">End Date</Label>
+                        <Input
+                          id="end-date-reporter"
+                          type="date"
+                          value={exportEndDate}
+                          onChange={(e) => setExportEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <Button className="w-full" onClick={handleExportCSV}>
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export My Schedule
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </div>
