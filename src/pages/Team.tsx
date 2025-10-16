@@ -215,7 +215,7 @@ export default function Team({ currentUser }: TeamProps) {
   const handleExportOptionChange = (value: string) => {
     setExportOption(value);
     // Show selection UI for options that need it
-    if (value === "by-chapter" || value === "each-chapter-lead" || value === "by-person") {
+    if (value === "by-chapter" || value === "by-person") {
       setShowSelection(true);
       // Reset selections
       setSelectedChapterLeads([]);
@@ -321,27 +321,6 @@ export default function Team({ currentUser }: TeamProps) {
         toast({
           title: "Success",
           description: `${chapterLeads.length} chapter leads exported to CSV`,
-        });
-        break;
-
-      case "each-chapter-lead":
-        // Export selected chapter leads individually
-        if (selectedChapterLeads.length === 0) {
-          toast({
-            title: "Error",
-            description: "Please select at least one chapter lead",
-            variant: "destructive",
-          });
-          return;
-        }
-        const selectedLeads = teamMembers.filter(m => selectedChapterLeads.includes(m.id));
-        selectedLeads.forEach((lead) => {
-          const filename = `chapter-lead-${lead.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
-          generateCSV([lead], filename);
-        });
-        toast({
-          title: "Success",
-          description: `${selectedLeads.length} files exported`,
         });
         break;
 
@@ -504,23 +483,13 @@ export default function Team({ currentUser }: TeamProps) {
                           </div>
                         </Label>
                       </div>
-
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="each-chapter-lead" id="each-chapter-lead" />
-                        <Label htmlFor="each-chapter-lead" className="cursor-pointer">
-                          <div className="font-medium">Each Chapter Lead Individually</div>
-                          <div className="text-xs text-muted-foreground">
-                            Select chapter leads to export
-                          </div>
-                        </Label>
-                      </div>
                     </RadioGroup>
 
                     {/* Selection UI for chapter leads */}
-                    {showSelection && (exportOption === "by-chapter" || exportOption === "each-chapter-lead") && (
+                    {showSelection && exportOption === "by-chapter" && (
                       <div className="border rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
                         <div className="flex items-center justify-between">
-                          <Label className="font-semibold">Select Chapter Leads:</Label>
+                          <Label className="font-semibold">Select Chapter Lead Teams:</Label>
                           <Button variant="ghost" size="sm" onClick={selectAllChapterLeads}>
                             Select All
                           </Button>
@@ -572,7 +541,7 @@ export default function Team({ currentUser }: TeamProps) {
 
                     <Button className="w-full" onClick={handleExportCSV}>
                       <FileDown className="h-4 w-4 mr-2" />
-                      Export {showSelection && (exportOption === "by-chapter" || exportOption === "each-chapter-lead") && selectedChapterLeads.length > 0 && `(${selectedChapterLeads.length})`}
+                      Export {showSelection && exportOption === "by-chapter" && selectedChapterLeads.length > 0 && `(${selectedChapterLeads.length})`}
                       {showSelection && exportOption === "by-person" && selectedPeople.length > 0 && `(${selectedPeople.length})`}
                     </Button>
                   </div>
