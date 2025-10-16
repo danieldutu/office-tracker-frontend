@@ -147,6 +147,56 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     };
   };
 
+  // Get color gradient based on utilization percentage
+  const getCapacityColors = (utilizationPercent: number, isOverbooked: boolean) => {
+    if (isOverbooked || utilizationPercent >= 100) {
+      // Red gradient for overbooked (100%+)
+      return {
+        border: "border-red-400",
+        bg: "bg-gradient-to-br from-red-100 to-red-50",
+        text: "text-red-700",
+        availableText: "text-red-600",
+        progressBar: "[&>div]:bg-red-500"
+      };
+    } else if (utilizationPercent >= 80) {
+      // Orange/Amber gradient for high occupancy (80-99%)
+      return {
+        border: "border-orange-400",
+        bg: "bg-gradient-to-br from-orange-100 to-orange-50",
+        text: "text-orange-700",
+        availableText: "text-orange-600",
+        progressBar: "[&>div]:bg-orange-500"
+      };
+    } else if (utilizationPercent >= 60) {
+      // Yellow gradient for medium-high occupancy (60-79%)
+      return {
+        border: "border-yellow-400",
+        bg: "bg-gradient-to-br from-yellow-100 to-yellow-50",
+        text: "text-yellow-700",
+        availableText: "text-yellow-600",
+        progressBar: "[&>div]:bg-yellow-500"
+      };
+    } else if (utilizationPercent >= 40) {
+      // Light green gradient for medium occupancy (40-59%)
+      return {
+        border: "border-lime-400",
+        bg: "bg-gradient-to-br from-lime-100 to-lime-50",
+        text: "text-lime-700",
+        availableText: "text-lime-600",
+        progressBar: "[&>div]:bg-lime-500"
+      };
+    } else {
+      // Green gradient for low occupancy (0-39%)
+      return {
+        border: "border-green-400",
+        bg: "bg-gradient-to-br from-green-100 to-green-50",
+        text: "text-green-700",
+        availableText: "text-green-600",
+        progressBar: "[&>div]:bg-green-500"
+      };
+    }
+  };
+
   const loadMonthlyStats = async () => {
     try {
       const startOfMonth = new Date();
@@ -404,74 +454,66 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                {officeCapacity.weekData.map((day: any) => (
-                  <div
-                    key={day.date}
-                    className={cn(
-                      "p-4 rounded-lg border-2 transition-all",
-                      day.isOverbooked
-                        ? "border-red-300 bg-red-50"
-                        : day.available <= 5
-                        ? "border-amber-300 bg-amber-50"
-                        : "border-green-300 bg-green-50"
-                    )}
-                  >
-                    <div className="space-y-3">
-                      {/* Day Header */}
-                      <div className="text-center">
-                        <div className="font-semibold text-sm">{day.day}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(new Date(day.date), "MMM d")}
-                        </div>
-                      </div>
-
-                      {/* Capacity Stats */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground">Capacity:</span>
-                          <span className="font-semibold">{day.capacity}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground">Booked:</span>
-                          <span className="font-semibold">{day.booked}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground">Available:</span>
-                          <span className={cn(
-                            "font-bold",
-                            day.isOverbooked ? "text-red-600" : day.available <= 5 ? "text-amber-600" : "text-green-600"
-                          )}>
-                            {day.isOverbooked ? "FULL" : day.available}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="space-y-1">
-                        <Progress
-                          value={Math.min(day.utilizationPercent, 100)}
-                          className={cn(
-                            "h-2",
-                            day.isOverbooked ? "[&>div]:bg-red-500" :
-                            day.utilizationPercent >= 80 ? "[&>div]:bg-amber-500" :
-                            "[&>div]:bg-green-500"
-                          )}
-                        />
-                        <div className="text-center text-xs font-medium">
-                          {day.utilizationPercent}%
-                        </div>
-                      </div>
-
-                      {/* Warning Badge */}
-                      {day.isOverbooked && (
-                        <div className="flex items-center justify-center gap-1 text-xs text-red-600 font-semibold">
-                          <AlertTriangle className="h-3 w-3" />
-                          Overbooked
-                        </div>
+                {officeCapacity.weekData.map((day: any) => {
+                  const colors = getCapacityColors(day.utilizationPercent, day.isOverbooked);
+                  return (
+                    <div
+                      key={day.date}
+                      className={cn(
+                        "p-4 rounded-lg border-2 transition-all shadow-sm hover:shadow-md",
+                        colors.border,
+                        colors.bg
                       )}
+                    >
+                      <div className="space-y-3">
+                        {/* Day Header */}
+                        <div className="text-center">
+                          <div className={cn("font-semibold text-sm", colors.text)}>{day.day}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {format(new Date(day.date), "MMM d")}
+                          </div>
+                        </div>
+
+                        {/* Capacity Stats */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Capacity:</span>
+                            <span className="font-semibold">{day.capacity}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Booked:</span>
+                            <span className="font-semibold">{day.booked}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">Available:</span>
+                            <span className={cn("font-bold", colors.availableText)}>
+                              {day.isOverbooked ? "FULL" : day.available}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="space-y-1">
+                          <Progress
+                            value={Math.min(day.utilizationPercent, 100)}
+                            className={cn("h-2", colors.progressBar)}
+                          />
+                          <div className={cn("text-center text-xs font-medium", colors.text)}>
+                            {day.utilizationPercent}%
+                          </div>
+                        </div>
+
+                        {/* Warning Badge */}
+                        {day.isOverbooked && (
+                          <div className="flex items-center justify-center gap-1 text-xs text-red-600 font-semibold">
+                            <AlertTriangle className="h-3 w-3" />
+                            Overbooked
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Summary Stats */}

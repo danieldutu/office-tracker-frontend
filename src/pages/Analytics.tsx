@@ -294,7 +294,7 @@ export default function Analytics({ currentUser }: AnalyticsProps) {
   };
 
   const handleDownloadPDF = async () => {
-    if (!analyticsRef.current) return;
+    if (!analyticsRef.current || !stats) return;
 
     setIsExporting(true);
     toast({
@@ -306,93 +306,197 @@ export default function Analytics({ currentUser }: AnalyticsProps) {
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 15;
+      const margin = 10;
+      const contentWidth = pageWidth - 2 * margin;
+      let yPosition = margin;
 
-      // Add title
-      pdf.setFontSize(20);
-      pdf.text("Analytics Report", margin, margin + 10);
+      // Header Section
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("ING Hubs - Analytics Report", margin, yPosition);
+      yPosition += 8;
 
-      // Add date range
-      pdf.setFontSize(12);
+      // Metadata Section
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100, 100, 100);
+
+      // Date range
       pdf.text(
-        `Period: ${format(new Date(startDate), "MMM d, yyyy")} - ${format(new Date(endDate), "MMM d, yyyy")}`,
+        `Report Period: ${format(new Date(startDate), "MMM d, yyyy")} - ${format(new Date(endDate), "MMM d, yyyy")}`,
         margin,
-        margin + 20
+        yPosition
       );
+      yPosition += 4;
 
-      let yPosition = margin + 35;
-
-      // Capture and add stats section
-      const statsCards = analyticsRef.current.querySelector('[data-section="stats"]');
-      if (statsCards) {
-        const canvas = await html2canvas(statsCards as HTMLElement, { scale: 2 });
-        const imgData = canvas.toDataURL("image/png");
-        const imgWidth = pageWidth - 2 * margin;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-        pdf.addImage(imgData, "PNG", margin, yPosition, imgWidth, imgHeight);
-        yPosition += imgHeight + 10;
+      // View mode details
+      let viewModeText = "";
+      if (viewMode === "overview") {
+        viewModeText = isTribeLeadUser ? "View Mode: Organization Overview" : "View Mode: Team Overview";
+      } else if (viewMode === "by-chapter-lead" && selectedChapterLead !== "all") {
+        const leadName = chapterLeads.find(l => l.id === selectedChapterLead)?.name || "Selected Chapter Lead";
+        viewModeText = `View Mode: Chapter Lead - ${leadName}`;
+      } else if (viewMode === "by-chapter-lead") {
+        viewModeText = "View Mode: All Chapter Leads";
+      } else if (viewMode === "by-individual" && selectedMember !== "all") {
+        const memberName = isTribeLeadUser
+          ? allUsers.find(u => u.id === selectedMember)?.name
+          : teamMembers.find(m => m.id === selectedMember)?.name;
+        viewModeText = `View Mode: Individual - ${memberName || "Selected Member"}`;
+      } else if (viewMode === "by-individual") {
+        viewModeText = "View Mode: All Individual Members";
       }
 
-      // Add new page for charts
-      pdf.addPage();
-      yPosition = margin;
+      if (viewModeText) {
+        pdf.text(viewModeText, margin, yPosition);
+        yPosition += 4;
+      }
 
-      // Capture occupancy chart
+      // Scope badge
+      const scopeText = stats.scope === "organization" ? "Organization-wide" : `Team: ${stats.teamName || "My Team"}`;
+      pdf.text(`Scope: ${scopeText}`, margin, yPosition);
+      yPosition += 4;
+
+      pdf.text(`Generated: ${format(new Date(), "MMM d, yyyy HH:mm")}`, margin, yPosition);
+      yPosition += 6;
+
+      // Divider line
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+      yPosition += 6;
+
+      pdf.setTextColor(0, 0, 0);
+
+      // Key Metrics Section (Compact)
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Key Metrics", margin, yPosition);
+      yPosition += 5;
+
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+
+      const col1X = margin;
+      const col2X = margin + contentWidth / 2;
+
+      // Column 1
+      pdf.text("Total Users:", col1X, yPosition);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(String(stats.totalUsers), col1X + 30, yPosition);
+
+      // Column 2
+      pdf.setFont("helvetica", "normal");
+      pdf.text("Avg. Occupancy:", col2X, yPosition);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${stats.averageOccupancy}%`, col2X + 35, yPosition);
+      yPosition += 5;
+
+      // Row 2
+      pdf.setFont("helvetica", "normal");
+      pdf.text("Most Popular Day:", col1X, yPosition);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(stats.mostPopularDay, col1X + 30, yPosition);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.text("Remote Work Rate:", col2X, yPosition);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${stats.remoteWorkRate}%`, col2X + 35, yPosition);
+      yPosition += 8;
+
+      // Charts Section - Two columns layout
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text("Office Occupancy Trend", margin, yPosition);
+      yPosition += 3;
+
+      // Capture and add occupancy chart (smaller)
       const occupancyChart = analyticsRef.current.querySelector('[data-section="occupancy-chart"]');
       if (occupancyChart) {
-        pdf.setFontSize(14);
-        pdf.text("Office Occupancy", margin, yPosition);
-        yPosition += 5;
-
-        const canvas = await html2canvas(occupancyChart as HTMLElement, { scale: 2 });
+        const canvas = await html2canvas(occupancyChart as HTMLElement, { scale: 1.5 });
         const imgData = canvas.toDataURL("image/png");
-        const imgWidth = pageWidth - 2 * margin;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-        if (yPosition + imgHeight > pageHeight - margin) {
-          pdf.addPage();
-          yPosition = margin;
-        }
+        const imgHeight = 50;
+        const imgWidth = contentWidth;
 
         pdf.addImage(imgData, "PNG", margin, yPosition, imgWidth, imgHeight);
-        yPosition += imgHeight + 10;
+        yPosition += imgHeight + 6;
       }
 
-      // Add new page for bottom charts
-      pdf.addPage();
-      yPosition = margin;
+      // Weekly Pattern and Status Distribution - Side by side
+      const chartStartY = yPosition;
 
-      // Capture weekly pattern chart
+      // Weekly Pattern (Left)
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text("Weekly Pattern", margin, yPosition);
+      yPosition += 3;
+
       const weeklyChart = analyticsRef.current.querySelector('[data-section="weekly-chart"]');
       if (weeklyChart) {
-        pdf.setFontSize(14);
-        pdf.text("Weekly Attendance Pattern", margin, yPosition);
-        yPosition += 5;
-
-        const canvas = await html2canvas(weeklyChart as HTMLElement, { scale: 2 });
+        const canvas = await html2canvas(weeklyChart as HTMLElement, { scale: 1.5 });
         const imgData = canvas.toDataURL("image/png");
-        const imgWidth = (pageWidth - 2 * margin) / 2 - 5;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const imgWidth = (contentWidth / 2) - 3;
+        const imgHeight = 45;
 
         pdf.addImage(imgData, "PNG", margin, yPosition, imgWidth, imgHeight);
       }
 
-      // Capture status distribution chart
+      // Status Distribution (Right)
+      yPosition = chartStartY;
+      pdf.text("Status Distribution", col2X, yPosition);
+      yPosition += 3;
+
       const statusChart = analyticsRef.current.querySelector('[data-section="status-chart"]');
       if (statusChart) {
-        pdf.setFontSize(14);
-        const xPos = margin + (pageWidth - 2 * margin) / 2 + 5;
-        pdf.text("Status Distribution", xPos, yPosition);
+        const canvas = await html2canvas(statusChart as HTMLElement, { scale: 1.5 });
+        const imgData = canvas.toDataURL("image/png");
+        const imgWidth = (contentWidth / 2) - 3;
+        const imgHeight = 45;
+
+        pdf.addImage(imgData, "PNG", col2X, yPosition, imgWidth, imgHeight);
+      }
+
+      yPosition += 48;
+
+      // Personal Stats Section (if space available)
+      if (yPosition < pageHeight - 35) {
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.text(`${currentUser.name.split(" ")[0]}'s Monthly Statistics`, margin, yPosition);
         yPosition += 5;
 
-        const canvas = await html2canvas(statusChart as HTMLElement, { scale: 2 });
-        const imgData = canvas.toDataURL("image/png");
-        const imgWidth = (pageWidth - 2 * margin) / 2 - 5;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
 
-        pdf.addImage(imgData, "PNG", xPos, yPosition, imgWidth, imgHeight);
+        const statsX1 = margin + 5;
+        const statsX2 = margin + contentWidth / 3 + 5;
+        const statsX3 = margin + 2 * contentWidth / 3 + 5;
+
+        pdf.text("Office Days:", statsX1, yPosition);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(String(personalStats.officeDays), statsX1, yPosition + 4);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.text("Current Streak:", statsX2, yPosition);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`${personalStats.currentStreak} days`, statsX2, yPosition + 4);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.text("Attendance Rate:", statsX3, yPosition);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(`${personalStats.attendanceRate}%`, statsX3, yPosition + 4);
+        yPosition += 10;
       }
+
+      // Footer
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "italic");
+      pdf.setTextColor(150, 150, 150);
+      pdf.text(
+        "ING Hubs Dacia One Office - Analytics Area | Confidential",
+        pageWidth / 2,
+        pageHeight - 5,
+        { align: "center" }
+      );
 
       // Save PDF
       const filename = `analytics-report-${startDate}-to-${endDate}.pdf`;
