@@ -169,6 +169,50 @@ export default function Team({ currentUser }: TeamProps) {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
   };
 
+  const handleExportCSV = () => {
+    // Create CSV header
+    const headers = ["Name", "Email", "Role", "Team", ...weekDays.map(({ day, dayNum }) => `${day} ${dayNum}`)];
+
+    // Create CSV rows
+    const rows = filteredMembers.map((member) => {
+      const weekStatus = weekDays.map(({ dateStr }) => {
+        const status = attendance[member.id]?.[dateStr];
+        return status ? status : "-";
+      });
+
+      return [
+        member.name,
+        member.email,
+        member.role,
+        member.teamName || "-",
+        ...weekStatus,
+      ];
+    });
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute("href", url);
+    link.setAttribute("download", `team-schedule-${format(currentWeekStart, "yyyy-MM-dd")}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Success",
+      description: "Team schedule exported to CSV",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -262,7 +306,7 @@ export default function Team({ currentUser }: TeamProps) {
                 </DialogContent>
               </Dialog>
             )}
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
