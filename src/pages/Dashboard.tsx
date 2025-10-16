@@ -26,13 +26,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const today = format(new Date(), "yyyy-MM-dd");
 
   const isUserReporter = isReporter(currentUser);
-  const canSetOwnStatus = !isUserReporter || canAllocateAttendance(currentUser);
+  const isTribeLeadUser = currentUser.role === "TRIBE_LEAD";
 
   useEffect(() => {
     loadTodayStatus();
     loadWeekAttendance();
     loadTeamStatus();
-    if (isUserReporter) {
+    if (!isTribeLeadUser) {
       loadChapterLead();
     }
   }, [currentUser.id]);
@@ -79,9 +79,19 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   const loadChapterLead = async () => {
     try {
-      const teamData = await getMyTeam();
-      if (teamData.chapterLead) {
-        setChapterLeadName(teamData.chapterLead.name);
+      if (currentUser.role === "CHAPTER_LEAD") {
+        // Chapter Leads are managed by Tribe Lead (Andreea Mihailescu)
+        const users = await getUsers();
+        const tribeLead = users.find(u => u.role === "TRIBE_LEAD");
+        if (tribeLead) {
+          setChapterLeadName(tribeLead.name);
+        }
+      } else if (currentUser.role === "REPORTER") {
+        // Reporters are managed by their Chapter Lead
+        const teamData = await getMyTeam();
+        if (teamData.chapterLead) {
+          setChapterLeadName(teamData.chapterLead.name);
+        }
       }
     } catch (error) {
       console.error("Error loading chapter lead:", error);
@@ -138,8 +148,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           {selectedStatus && <StatusBadge status={selectedStatus} size="lg" />}
         </div>
 
-        {/* Quick Status Update - Only for Leaders */}
-        {canSetOwnStatus ? (
+        {/* Quick Status Update - Only for Tribe Lead */}
+        {isTribeLeadUser && (
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="text-center text-2xl">How are you working today?</CardTitle>
@@ -184,116 +194,90 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               )}
             </CardContent>
           </Card>
-        ) : (
-          /* Schedule Overview for Reporters */
-          <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-background">
-            <CardHeader>
-              <CardTitle className="text-center text-2xl flex items-center justify-center gap-2">
-                <Info className="h-6 w-6 text-blue-600" />
-                Your Schedule This Week
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+        )}
+
+        {/* Schedule Overview for Everyone */}
+        <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-background">
+          <CardHeader>
+            <CardTitle className="text-center text-2xl flex items-center justify-center gap-2">
+              <Info className="h-6 w-6 text-blue-600" />
+              Your Schedule This Week
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {!isTribeLeadUser && (
               <div className="text-center space-y-2">
                 <p className="text-muted-foreground">
                   Your attendance is managed by {chapterLeadName ? (
                     <span className="font-semibold text-foreground">{chapterLeadName}</span>
                   ) : (
-                    "your Chapter Lead"
+                    "the Tribe Lead"
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Check the calendar or contact your lead if you need to make changes
                 </p>
               </div>
+            )}
 
-              <div className="grid grid-cols-5 gap-3">
-                {weekDays.map(({ dateStr, day, dayNum }) => (
-                  <div key={dateStr} className="text-center space-y-2">
-                    <div className="text-sm font-medium">{day}</div>
-                    <div className="text-xs text-muted-foreground">{dayNum}</div>
-                    <div className="h-20 flex items-center justify-center">
-                      {weekAttendance[dateStr] ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <StatusBadge status={weekAttendance[dateStr]} size="md" showIcon={true} />
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
-                          Not set
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => window.location.href = "/calendar"}>
-                  View Full Calendar
-                </Button>
-                <Button variant="outline" className="flex-1" onClick={() => window.location.href = "/team"}>
-                  View Team Schedule
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* This Week's Schedule - Only for Leaders */}
-          {canSetOwnStatus && (
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>This Week's Schedule</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-5 gap-3">
-                  {weekDays.map(({ dateStr, day, dayNum }) => (
-                    <div key={dateStr} className="text-center space-y-2">
-                      <div className="text-sm font-medium">{day}</div>
-                      <div className="text-xs text-muted-foreground">{dayNum}</div>
-                      <div className="h-16 flex items-center justify-center">
-                        {weekAttendance[dateStr] ? (
-                          <StatusBadge status={weekAttendance[dateStr]} size="sm" showIcon={false} />
-                        ) : (
-                          <div className="text-xs text-muted-foreground">Not set</div>
-                        )}
+            <div className="grid grid-cols-5 gap-3">
+              {weekDays.map(({ dateStr, day, dayNum }) => (
+                <div key={dateStr} className="text-center space-y-2">
+                  <div className="text-sm font-medium">{day}</div>
+                  <div className="text-xs text-muted-foreground">{dayNum}</div>
+                  <div className="h-20 flex items-center justify-center">
+                    {weekAttendance[dateStr] ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <StatusBadge status={weekAttendance[dateStr]} size="md" showIcon={true} />
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Team Summary */}
-          <Card className={canSetOwnStatus ? "" : "lg:col-span-3"}>
-            <CardHeader>
-              <CardTitle>Who's in the office today?</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-primary">{teamInOffice.length}</div>
-                <div className="text-sm text-muted-foreground">people in office</div>
-              </div>
-
-              <div className="flex flex-wrap gap-2 justify-center">
-                {teamInOffice.slice(0, 8).map(user => (
-                  <UserAvatar key={user.id} name={user.name} avatar={user.avatar} size="sm" />
-                ))}
-                {teamInOffice.length > 8 && (
-                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                    +{teamInOffice.length - 8}
+                    ) : (
+                      <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                        Not set
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              ))}
+            </div>
 
-              <Button variant="outline" className="w-full" onClick={() => window.location.href = "/team"}>
-                View full team →
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => window.location.href = "/calendar"}>
+                View Full Calendar
               </Button>
-            </CardContent>
-          </Card>
-        </div>
+              <Button variant="outline" className="flex-1" onClick={() => window.location.href = "/team"}>
+                View Team Schedule
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Team Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Who's in the office today?</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center">
+              <div className="text-4xl font-bold text-primary">{teamInOffice.length}</div>
+              <div className="text-sm text-muted-foreground">people in office</div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 justify-center">
+              {teamInOffice.slice(0, 8).map(user => (
+                <UserAvatar key={user.id} name={user.name} avatar={user.avatar} size="sm" />
+              ))}
+              {teamInOffice.length > 8 && (
+                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                  +{teamInOffice.length - 8}
+                </div>
+              )}
+            </div>
+
+            <Button variant="outline" className="w-full" onClick={() => window.location.href = "/team"}>
+              View full team →
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
