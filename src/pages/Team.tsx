@@ -50,10 +50,12 @@ export default function Team({ currentUser }: TeamProps) {
   const [selectedChapterLeads, setSelectedChapterLeads] = useState<string[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [showSelection, setShowSelection] = useState(false);
+  const [isChapterLeadExportDialogOpen, setIsChapterLeadExportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const canAllocate = canAllocateAttendance(currentUser);
   const isReadOnly = isReporter(currentUser);
+  const isChapterLeadUser = currentUser.role === "CHAPTER_LEAD";
 
   useEffect(() => {
     loadTeam();
@@ -247,19 +249,72 @@ export default function Team({ currentUser }: TeamProps) {
     setSelectedPeople(allPeopleIds);
   };
 
+  const handleChapterLeadExport = () => {
+    const weekStr = format(currentWeekStart, "yyyy-MM-dd");
+
+    switch (exportOption) {
+      case "all":
+        // Export all team members in one file
+        generateCSV(teamMembers, `my-team-${weekStr}.csv`);
+        toast({
+          title: "Success",
+          description: `${teamMembers.length} team members exported to CSV`,
+        });
+        break;
+
+      case "by-person":
+        // Export selected team members
+        if (selectedPeople.length === 0) {
+          toast({
+            title: "Error",
+            description: "Please select at least one team member",
+            variant: "destructive",
+          });
+          return;
+        }
+        const selectedMembers = teamMembers.filter(m => selectedPeople.includes(m.id));
+        selectedMembers.forEach((member) => {
+          const filename = `person-${member.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
+          generateCSV([member], filename);
+        });
+        toast({
+          title: "Success",
+          description: `${selectedMembers.length} files exported`,
+        });
+        break;
+
+      default:
+        break;
+    }
+
+    setIsChapterLeadExportDialogOpen(false);
+    setShowSelection(false);
+    setSelectedPeople([]);
+  };
+
   const handleExportCSV = () => {
-    if (!isTribeLead(currentUser)) {
-      // Simple export for non-Tribe Leads
-      generateCSV(filteredMembers, `team-schedule-${format(currentWeekStart, "yyyy-MM-dd")}.csv`);
-      toast({
-        title: "Success",
-        description: "Team schedule exported to CSV",
-      });
+    const weekStr = format(currentWeekStart, "yyyy-MM-dd");
+
+    // Reporter: Export own data only
+    if (isReporter(currentUser)) {
+      const reporterData = teamMembers.find(m => m.id === currentUser.id);
+      if (reporterData) {
+        generateCSV([reporterData], `my-schedule-${weekStr}.csv`);
+        toast({
+          title: "Success",
+          description: "Your schedule exported to CSV",
+        });
+      }
+      return;
+    }
+
+    // Chapter Lead: Handle their export options
+    if (isChapterLeadUser) {
+      handleChapterLeadExport();
       return;
     }
 
     // Advanced export options for Tribe Lead
-    const weekStr = format(currentWeekStart, "yyyy-MM-dd");
 
     switch (exportOption) {
       case "all":
@@ -427,7 +482,82 @@ export default function Team({ currentUser }: TeamProps) {
                 </DialogContent>
               </Dialog>
             )}
-            {isTribeLead(currentUser) ? (
+            {isChapterLeadUser ? (
+              <Dialog open={isChapterLeadExportDialogOpen} onOpenChange={setIsChapterLeadExportDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Export Team Schedule</DialogTitle>
+                    <DialogDescription>
+                      Choose how you want to export your team's schedules
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <RadioGroup value={exportOption} onValueChange={handleExportOptionChange}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="all" id="all-chapter" />
+                        <Label htmlFor="all-chapter" className="cursor-pointer">
+                          <div className="font-medium">All Team Members (Single File)</div>
+                          <div className="text-xs text-muted-foreground">
+                            Export all {teamMembers.length} team members in one CSV file
+                          </div>
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="by-person" id="by-person-chapter" />
+                        <Label htmlFor="by-person-chapter" className="cursor-pointer">
+                          <div className="font-medium">By Team Member</div>
+                          <div className="text-xs text-muted-foreground">
+                            Select team members to export individually
+                          </div>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+
+                    {/* Selection UI for team members */}
+                    {showSelection && exportOption === "by-person" && (
+                      <div className="border rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-semibold">Select Team Members:</Label>
+                          <Button variant="ghost" size="sm" onClick={selectAllPeople}>
+                            Select All
+                          </Button>
+                        </div>
+                        <Input
+                          placeholder="Search team members..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="mb-2"
+                        />
+                        {filteredMembers.map((member) => (
+                          <div key={member.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`member-${member.id}`}
+                              checked={selectedPeople.includes(member.id)}
+                              onCheckedChange={() => togglePerson(member.id)}
+                            />
+                            <Label htmlFor={`member-${member.id}`} className="cursor-pointer font-normal">
+                              {member.name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <Button className="w-full" onClick={handleExportCSV}>
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export {showSelection && exportOption === "by-person" && selectedPeople.length > 0 && `(${selectedPeople.length})`}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : isTribeLead(currentUser) ? (
               <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="gap-2">
