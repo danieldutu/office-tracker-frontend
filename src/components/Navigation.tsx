@@ -8,8 +8,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
 import { User as UserType } from "@/types";
+import { canAccessAdmin, canViewAnalytics, getRoleName, getRoleColor } from "@/lib/permissions";
 
 interface NavigationProps {
   currentUser: UserType | null;
@@ -19,12 +21,16 @@ interface NavigationProps {
 export const Navigation = ({ currentUser, onLogout }: NavigationProps) => {
   const location = useLocation();
 
+  // Build navigation items based on role
   const navItems = [
     { path: "/", label: "Dashboard", icon: Building2 },
     { path: "/calendar", label: "Calendar", icon: Calendar },
     { path: "/team", label: "Team", icon: Users },
-    { path: "/analytics", label: "Analytics", icon: BarChart3 },
   ];
+
+  if (currentUser && canViewAnalytics(currentUser)) {
+    navItems.push({ path: "/analytics", label: "Analytics", icon: BarChart3 });
+  }
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -65,12 +71,15 @@ export const Navigation = ({ currentUser, onLogout }: NavigationProps) => {
           {currentUser && (
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 rounded-full hover:opacity-80 transition-opacity">
-                <UserAvatar name={currentUser.name} avatar={currentUser.avatar} size="sm" />
+                <UserAvatar name={currentUser.name} avatar={currentUser.avatarUrl} size="sm" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-popover">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{currentUser.name}</p>
                   <p className="text-xs text-muted-foreground">{currentUser.email}</p>
+                  <Badge className={cn("text-xs mt-1", getRoleColor(currentUser.role))}>
+                    {getRoleName(currentUser.role)}
+                  </Badge>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
@@ -79,7 +88,7 @@ export const Navigation = ({ currentUser, onLogout }: NavigationProps) => {
                     Profile
                   </Link>
                 </DropdownMenuItem>
-                {currentUser.role === "admin" && (
+                {canAccessAdmin(currentUser) && (
                   <DropdownMenuItem asChild>
                     <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
                       <Settings className="h-4 w-4" />

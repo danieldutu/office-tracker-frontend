@@ -14,6 +14,7 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import { User } from "./types";
 import { getCurrentUser, logout } from "./lib/api";
+import { canAccessAdmin, canViewAnalytics } from "./lib/permissions";
 
 const App = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -58,11 +59,13 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Dashboard currentUser={currentUser} />} />
               <Route path="/calendar" element={<Calendar currentUser={currentUser} />} />
-              <Route path="/team" element={<Team />} />
-              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/team" element={<Team currentUser={currentUser} />} />
+              {canViewAnalytics(currentUser) && (
+                <Route path="/analytics" element={<Analytics currentUser={currentUser} />} />
+              )}
               <Route path="/profile" element={<Profile currentUser={currentUser} onUpdate={setCurrentUser} />} />
-              {currentUser.role === "admin" && (
-                <Route path="/admin" element={<Admin />} />
+              {canAccessAdmin(currentUser) && (
+                <Route path="/admin" element={<Admin currentUser={currentUser} />} />
               )}
               <Route path="/login" element={<Navigate to="/" replace />} />
               <Route path="*" element={<NotFound />} />

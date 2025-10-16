@@ -1,11 +1,16 @@
-export type AttendanceStatus = "office" | "remote" | "absent";
+export type AttendanceStatus = "office" | "remote" | "off";
+
+export type UserRole = "REPORTER" | "CHAPTER_LEAD" | "TRIBE_LEAD";
 
 export interface User {
   id: string;
   email: string;
   name: string;
-  avatar?: string;
-  role: "user" | "admin";
+  avatarUrl?: string;
+  role: UserRole;
+  teamName?: string;
+  chapterLeadId?: string;
+  isFirstLogin: boolean;
   createdAt: string;
 }
 
@@ -24,6 +29,8 @@ export interface AttendanceStats {
   averageOccupancy: number;
   mostPopularDay: string;
   remoteWorkRate: number;
+  scope?: "team" | "organization";
+  teamName?: string;
 }
 
 export interface OccupancyData {
@@ -34,4 +41,48 @@ export interface OccupancyData {
 export interface WeeklyPattern {
   day: string;
   count: number;
+}
+
+export interface TeamMember extends User {
+  attendance?: AttendanceRecord[];
+}
+
+export interface MyTeamResponse {
+  chapterLead?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  teamMembers: TeamMember[];
+  isReadOnly: boolean;
+  teamsByChapterLead?: Array<{
+    chapterLead: {
+      id: string;
+      name: string;
+      email: string;
+      teamName?: string;
+    };
+    members: TeamMember[];
+  }>;
+}
+
+export interface ChapterLeadInfo {
+  id: string;
+  name: string;
+  email: string;
+  teamName?: string;
+  avatarUrl?: string;
+  directReportsCount: number;
+  directReports: TeamMember[];
+}
+
+export interface TeamHierarchyResponse {
+  tribeLead: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  chapterLeads: ChapterLeadInfo[];
+  totalUsers: number;
+  scope: "team" | "organization";
 }
