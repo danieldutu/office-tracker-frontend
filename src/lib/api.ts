@@ -8,8 +8,8 @@ import {
   TeamHierarchyResponse
 } from "@/types";
 
-// Production API URL - using localhost for development
-const API_BASE = "http://localhost:3000/api";
+// Production API URL - using environment variable or fallback to localhost
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
 // Helper to get auth headers
 const getAuthHeaders = () => {
