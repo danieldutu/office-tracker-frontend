@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp, Users, Calendar, Home } from "lucide-react";
+import { Download, TrendingUp, Users, Calendar, Home, Building2 } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { getAnalyticsOverview, getOccupancyData, getWeeklyPattern } from "@/lib/api";
-import { AttendanceStats, OccupancyData, WeeklyPattern } from "@/types";
+import { AttendanceStats, OccupancyData, WeeklyPattern, User } from "@/types";
+import { isTribeLead } from "@/lib/permissions";
 
-export default function Analytics() {
+interface AnalyticsProps {
+  currentUser: User;
+}
+
+export default function Analytics({ currentUser }: AnalyticsProps) {
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [occupancyData, setOccupancyData] = useState<OccupancyData[]>([]);
   const [weeklyPattern, setWeeklyPattern] = useState<WeeklyPattern[]>([]);
@@ -38,7 +44,21 @@ export default function Analytics() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Analytics</h1>
+          <div>
+            <h1 className="text-3xl font-bold">Analytics</h1>
+            {stats && (
+              <div className="flex items-center gap-2 mt-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {stats.scope === "organization" ? "Organization-wide view" : "Team view"}
+                  {stats.teamName && ` • ${stats.teamName}`}
+                </span>
+                <Badge variant={stats.scope === "organization" ? "default" : "secondary"}>
+                  {stats.scope === "organization" ? "All Teams" : "My Team"}
+                </Badge>
+              </div>
+            )}
+          </div>
           <Button variant="outline" className="gap-2">
             <Download className="h-4 w-4" />
             Download Report
