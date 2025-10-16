@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, addDays } from "date-fns";
-import { Search, ChevronLeft, ChevronRight, Download, UserPlus, Building2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Download, UserPlus, Building2, FileDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/UserAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { User, AttendanceStatus, TeamMember } from "@/types";
@@ -42,6 +44,8 @@ export default function Team({ currentUser }: TeamProps) {
   const [isAllocating, setIsAllocating] = useState(false);
   const [chapterLeadName, setChapterLeadName] = useState("");
   const [teamsByChapterLead, setTeamsByChapterLead] = useState<any[]>([]);
+  const [exportOption, setExportOption] = useState<string>("all");
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const canAllocate = canAllocateAttendance(currentUser);
@@ -169,12 +173,10 @@ export default function Team({ currentUser }: TeamProps) {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
   };
 
-  const handleExportCSV = () => {
-    // Create CSV header
+  const generateCSV = (members: TeamMember[], filename: string) => {
     const headers = ["Name", "Email", "Role", "Team", ...weekDays.map(({ day, dayNum }) => `${day} ${dayNum}`)];
 
-    // Create CSV rows
-    const rows = filteredMembers.map((member) => {
+    const rows = members.map((member) => {
       const weekStatus = weekDays.map(({ dateStr }) => {
         const status = attendance[member.id]?.[dateStr];
         return status ? status : "-";
@@ -189,28 +191,100 @@ export default function Team({ currentUser }: TeamProps) {
       ];
     });
 
-    // Combine headers and rows
     const csvContent = [
       headers.join(","),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(",")),
     ].join("\n");
 
-    // Create download link
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
 
     link.setAttribute("href", url);
-    link.setAttribute("download", `team-schedule-${format(currentWeekStart, "yyyy-MM-dd")}.csv`);
+    link.setAttribute("download", filename);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
 
-    toast({
-      title: "Success",
-      description: "Team schedule exported to CSV",
-    });
+  const handleExportCSV = () => {
+    if (!isTribeLead(currentUser)) {
+      // Simple export for non-Tribe Leads
+      generateCSV(filteredMembers, `team-schedule-${format(currentWeekStart, "yyyy-MM-dd")}.csv`);
+      toast({
+        title: "Success",
+        description: "Team schedule exported to CSV",
+      });
+      return;
+    }
+
+    // Advanced export options for Tribe Lead
+    const weekStr = format(currentWeekStart, "yyyy-MM-dd");
+
+    switch (exportOption) {
+      case "all":
+        // Export everyone in one file
+        generateCSV(teamMembers, `all-teams-${weekStr}.csv`);
+        toast({
+          title: "Success",
+          description: "All teams exported to CSV",
+        });
+        break;
+
+      case "by-chapter":
+        // Export one file per chapter lead's team
+        teamsByChapterLead.forEach((team: any) => {
+          const chapterLeadName = team.chapterLead?.name || "No-Lead";
+          const filename = `team-${chapterLeadName.replace(/\s+/g, "-")}-${weekStr}.csv`;
+          generateCSV(team.members, filename);
+        });
+        toast({
+          title: "Success",
+          description: `${teamsByChapterLead.length} files exported (one per chapter lead)`,
+        });
+        break;
+
+      case "by-person":
+        // Export one file per person
+        teamMembers.forEach((member) => {
+          const filename = `person-${member.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
+          generateCSV([member], filename);
+        });
+        toast({
+          title: "Success",
+          description: `${teamMembers.length} files exported (one per person)`,
+        });
+        break;
+
+      case "chapter-leads-only":
+        // Export all chapter leads in one file
+        const chapterLeads = teamMembers.filter(m => m.role === "CHAPTER_LEAD");
+        generateCSV(chapterLeads, `chapter-leads-${weekStr}.csv`);
+        toast({
+          title: "Success",
+          description: `${chapterLeads.length} chapter leads exported to CSV`,
+        });
+        break;
+
+      case "each-chapter-lead":
+        // Export one file per chapter lead (their own record only)
+        const leads = teamMembers.filter(m => m.role === "CHAPTER_LEAD");
+        leads.forEach((lead) => {
+          const filename = `chapter-lead-${lead.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
+          generateCSV([lead], filename);
+        });
+        toast({
+          title: "Success",
+          description: `${leads.length} files exported (one per chapter lead)`,
+        });
+        break;
+
+      default:
+        break;
+    }
+
+    setIsExportDialogOpen(false);
   };
 
   return (
@@ -306,10 +380,87 @@ export default function Team({ currentUser }: TeamProps) {
                 </DialogContent>
               </Dialog>
             )}
-            <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
+            {isTribeLead(currentUser) ? (
+              <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Export Schedule Options</DialogTitle>
+                    <DialogDescription>
+                      Choose how you want to export the team schedules
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <RadioGroup value={exportOption} onValueChange={setExportOption}>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="all" id="all" />
+                        <Label htmlFor="all" className="cursor-pointer">
+                          <div className="font-medium">All Teams (Single File)</div>
+                          <div className="text-xs text-muted-foreground">
+                            Export everyone in one CSV file
+                          </div>
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="by-chapter" id="by-chapter" />
+                        <Label htmlFor="by-chapter" className="cursor-pointer">
+                          <div className="font-medium">By Chapter Lead Team</div>
+                          <div className="text-xs text-muted-foreground">
+                            One file per chapter lead's team ({teamsByChapterLead.length} files)
+                          </div>
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="by-person" id="by-person" />
+                        <Label htmlFor="by-person" className="cursor-pointer">
+                          <div className="font-medium">By Person</div>
+                          <div className="text-xs text-muted-foreground">
+                            One file per person ({teamMembers.length} files)
+                          </div>
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="chapter-leads-only" id="chapter-leads-only" />
+                        <Label htmlFor="chapter-leads-only" className="cursor-pointer">
+                          <div className="font-medium">All Chapter Leads (Single File)</div>
+                          <div className="text-xs text-muted-foreground">
+                            Export only chapter leads in one file
+                          </div>
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="each-chapter-lead" id="each-chapter-lead" />
+                        <Label htmlFor="each-chapter-lead" className="cursor-pointer">
+                          <div className="font-medium">Each Chapter Lead Individually</div>
+                          <div className="text-xs text-muted-foreground">
+                            One file per chapter lead ({teamMembers.filter(m => m.role === "CHAPTER_LEAD").length} files)
+                          </div>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+
+                    <Button className="w-full" onClick={handleExportCSV}>
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            )}
           </div>
         </div>
 
