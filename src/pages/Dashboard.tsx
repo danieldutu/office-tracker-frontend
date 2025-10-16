@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, addDays } from "date-fns";
-import { Building2, Home, XCircle, TrendingUp } from "lucide-react";
+import { Building2, Home, XCircle, TrendingUp, User as UserIcon, Info } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AttendanceStatus, User } from "@/types";
-import { createAttendance, getAttendance, getUsers } from "@/lib/api";
+import { createAttendance, getAttendance, getUsers, getMyTeam } from "@/lib/api";
+import { isReporter, canAllocateAttendance } from "@/lib/permissions";
 
 interface DashboardProps {
   currentUser: User;
@@ -21,12 +22,19 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [showNotes, setShowNotes] = useState(false);
   const [weekAttendance, setWeekAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [teamInOffice, setTeamInOffice] = useState<User[]>([]);
+  const [chapterLeadName, setChapterLeadName] = useState("");
   const today = format(new Date(), "yyyy-MM-dd");
+
+  const isUserReporter = isReporter(currentUser);
+  const canSetOwnStatus = !isUserReporter || canAllocateAttendance(currentUser);
 
   useEffect(() => {
     loadTodayStatus();
     loadWeekAttendance();
     loadTeamStatus();
+    if (isUserReporter) {
+      loadChapterLead();
+    }
   }, [currentUser.id]);
 
   const loadTodayStatus = async () => {
@@ -63,10 +71,21 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       endDate: today,
       status: "office",
     });
-    
+
     const officeUserIds = new Set(allRecords.map(r => r.userId));
     const inOffice = users.filter(u => officeUserIds.has(u.id));
     setTeamInOffice(inOffice);
+  };
+
+  const loadChapterLead = async () => {
+    try {
+      const teamData = await getMyTeam();
+      if (teamData.chapterLead) {
+        setChapterLeadName(teamData.chapterLead.name);
+      }
+    } catch (error) {
+      console.error("Error loading chapter lead:", error);
+    }
   };
 
   const handleStatusSelect = async (status: AttendanceStatus) => {
@@ -119,79 +138,136 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           {selectedStatus && <StatusBadge status={selectedStatus} size="lg" />}
         </div>
 
-        {/* Quick Status Update */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="text-center text-2xl">How are you working today?</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {statusCards.map(({ status, icon: Icon, label, color }) => (
-                <button
-                  key={status}
-                  onClick={() => handleStatusSelect(status)}
-                  className={cn(
-                    "relative p-6 rounded-xl border-2 transition-all",
-                    "hover:scale-105 hover:shadow-lg",
-                    selectedStatus === status ? "ring-2 ring-primary ring-offset-2" : "",
-                    color
-                  )}
-                >
-                  <div className="flex flex-col items-center gap-3">
-                    <Icon className="h-12 w-12" />
-                    <span className="font-semibold text-lg">{label}</span>
-                    {selectedStatus === status && (
-                      <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
-                        <span className="text-white text-xs">✓</span>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {!showNotes ? (
-              <Button variant="outline" onClick={() => setShowNotes(true)} className="w-full">
-                Add notes (optional)
-              </Button>
-            ) : (
-              <Textarea
-                placeholder="Add any notes about your work location today..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="min-h-[80px]"
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* This Week's Schedule */}
-          <Card className="lg:col-span-2">
+        {/* Quick Status Update - Only for Leaders */}
+        {canSetOwnStatus ? (
+          <Card className="border-2">
             <CardHeader>
-              <CardTitle>This Week's Schedule</CardTitle>
+              <CardTitle className="text-center text-2xl">How are you working today?</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {statusCards.map(({ status, icon: Icon, label, color }) => (
+                  <button
+                    key={status}
+                    onClick={() => handleStatusSelect(status)}
+                    className={cn(
+                      "relative p-6 rounded-xl border-2 transition-all",
+                      "hover:scale-105 hover:shadow-lg",
+                      selectedStatus === status ? "ring-2 ring-primary ring-offset-2" : "",
+                      color
+                    )}
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <Icon className="h-12 w-12" />
+                      <span className="font-semibold text-lg">{label}</span>
+                      {selectedStatus === status && (
+                        <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+                          <span className="text-white text-xs">✓</span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {!showNotes ? (
+                <Button variant="outline" onClick={() => setShowNotes(true)} className="w-full">
+                  Add notes (optional)
+                </Button>
+              ) : (
+                <Textarea
+                  placeholder="Add any notes about your work location today..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          /* Schedule Overview for Reporters */
+          <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-background">
+            <CardHeader>
+              <CardTitle className="text-center text-2xl flex items-center justify-center gap-2">
+                <Info className="h-6 w-6 text-blue-600" />
+                Your Schedule This Week
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-center space-y-2">
+                <p className="text-muted-foreground">
+                  Your attendance is managed by {chapterLeadName ? (
+                    <span className="font-semibold text-foreground">{chapterLeadName}</span>
+                  ) : (
+                    "your Chapter Lead"
+                  )}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Check the calendar or contact your lead if you need to make changes
+                </p>
+              </div>
+
               <div className="grid grid-cols-5 gap-3">
                 {weekDays.map(({ dateStr, day, dayNum }) => (
                   <div key={dateStr} className="text-center space-y-2">
                     <div className="text-sm font-medium">{day}</div>
                     <div className="text-xs text-muted-foreground">{dayNum}</div>
-                    <div className="h-16 flex items-center justify-center">
+                    <div className="h-20 flex items-center justify-center">
                       {weekAttendance[dateStr] ? (
-                        <StatusBadge status={weekAttendance[dateStr]} size="sm" showIcon={false} />
+                        <div className="flex flex-col items-center gap-2">
+                          <StatusBadge status={weekAttendance[dateStr]} size="md" showIcon={true} />
+                        </div>
                       ) : (
-                        <div className="text-xs text-muted-foreground">Not set</div>
+                        <div className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                          Not set
+                        </div>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => window.location.href = "/calendar"}>
+                  View Full Calendar
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => window.location.href = "/team"}>
+                  View Team Schedule
+                </Button>
+              </div>
             </CardContent>
           </Card>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* This Week's Schedule - Only for Leaders */}
+          {canSetOwnStatus && (
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>This Week's Schedule</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-5 gap-3">
+                  {weekDays.map(({ dateStr, day, dayNum }) => (
+                    <div key={dateStr} className="text-center space-y-2">
+                      <div className="text-sm font-medium">{day}</div>
+                      <div className="text-xs text-muted-foreground">{dayNum}</div>
+                      <div className="h-16 flex items-center justify-center">
+                        {weekAttendance[dateStr] ? (
+                          <StatusBadge status={weekAttendance[dateStr]} size="sm" showIcon={false} />
+                        ) : (
+                          <div className="text-xs text-muted-foreground">Not set</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Team Summary */}
-          <Card>
+          <Card className={canSetOwnStatus ? "" : "lg:col-span-3"}>
             <CardHeader>
               <CardTitle>Who's in the office today?</CardTitle>
             </CardHeader>
@@ -200,7 +276,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 <div className="text-4xl font-bold text-primary">{teamInOffice.length}</div>
                 <div className="text-sm text-muted-foreground">people in office</div>
               </div>
-              
+
               <div className="flex flex-wrap gap-2 justify-center">
                 {teamInOffice.slice(0, 8).map(user => (
                   <UserAvatar key={user.id} name={user.name} avatar={user.avatar} size="sm" />
