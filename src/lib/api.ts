@@ -12,9 +12,21 @@ const mockUsers: User[] = [
 const mockAttendance: AttendanceRecord[] = [];
 
 // Auth
-export const login = async (email: string) => {
-  // Simulate API call
-  return new Promise((resolve) => setTimeout(resolve, 1000));
+export const login = async (email: string, password: string) => {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Login failed");
+  }
+
+  const data = await res.json();
+  setCurrentUser(data.user);
+  return data;
 };
 
 export const logout = async () => {
@@ -36,36 +48,32 @@ export const setCurrentUser = (user: User) => {
 
 // Users
 export const getUsers = async (): Promise<User[]> => {
-  return Promise.resolve(mockUsers);
+  const res = await fetch(`${API_BASE}/users`);
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
 };
 
 export const updateUser = async (id: string, data: Partial<User>): Promise<User> => {
-  const userIndex = mockUsers.findIndex(u => u.id === id);
-  if (userIndex !== -1) {
-    mockUsers[userIndex] = { ...mockUsers[userIndex], ...data };
-    return mockUsers[userIndex];
-  }
-  throw new Error("User not found");
+  const res = await fetch(`${API_BASE}/users/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) throw new Error("Failed to update user");
+  return res.json();
 };
 
 // Attendance
 export const createAttendance = async (data: Omit<AttendanceRecord, "id" | "createdAt" | "updatedAt">): Promise<AttendanceRecord> => {
-  const record: AttendanceRecord = {
-    ...data,
-    id: Math.random().toString(36).substr(2, 9),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  // Remove existing record for same user and date
-  const index = mockAttendance.findIndex(a => a.userId === data.userId && a.date === data.date);
-  if (index !== -1) {
-    mockAttendance[index] = record;
-  } else {
-    mockAttendance.push(record);
-  }
-  
-  return record;
+  const res = await fetch(`${API_BASE}/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) throw new Error("Failed to create attendance");
+  return res.json();
 };
 
 export const getAttendance = async (params?: {
@@ -74,58 +82,40 @@ export const getAttendance = async (params?: {
   endDate?: string;
   status?: string;
 }): Promise<AttendanceRecord[]> => {
-  let results = [...mockAttendance];
-  
-  if (params?.userId) {
-    results = results.filter(a => a.userId === params.userId);
-  }
-  if (params?.startDate) {
-    results = results.filter(a => a.date >= params.startDate!);
-  }
-  if (params?.endDate) {
-    results = results.filter(a => a.date <= params.endDate!);
-  }
-  if (params?.status) {
-    results = results.filter(a => a.status === params.status);
-  }
-  
-  return Promise.resolve(results);
+  const queryParams = new URLSearchParams();
+  if (params?.userId) queryParams.set("userId", params.userId);
+  if (params?.startDate) queryParams.set("startDate", params.startDate);
+  if (params?.endDate) queryParams.set("endDate", params.endDate);
+  if (params?.status) queryParams.set("status", params.status);
+
+  const url = `${API_BASE}/attendance${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  const res = await fetch(url);
+
+  if (!res.ok) throw new Error("Failed to fetch attendance");
+  return res.json();
 };
 
 // Analytics
 export const getAnalyticsOverview = async (): Promise<AttendanceStats> => {
-  return Promise.resolve({
-    totalUsers: mockUsers.length,
-    averageOccupancy: 65,
-    mostPopularDay: "Tuesday",
-    remoteWorkRate: 35,
-  });
+  const res = await fetch(`${API_BASE}/analytics/overview`);
+  if (!res.ok) throw new Error("Failed to fetch analytics overview");
+  return res.json();
 };
 
 export const getOccupancyData = async (startDate?: string, endDate?: string): Promise<OccupancyData[]> => {
-  // Mock occupancy data
-  const data: OccupancyData[] = [];
-  const start = new Date();
-  start.setDate(start.getDate() - 30);
-  
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(start);
-    date.setDate(date.getDate() + i);
-    data.push({
-      date: date.toISOString().split('T')[0],
-      count: Math.floor(Math.random() * 40) + 10,
-    });
-  }
-  
-  return Promise.resolve(data);
+  const queryParams = new URLSearchParams();
+  if (startDate) queryParams.set("startDate", startDate);
+  if (endDate) queryParams.set("endDate", endDate);
+
+  const url = `${API_BASE}/analytics/occupancy${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  const res = await fetch(url);
+
+  if (!res.ok) throw new Error("Failed to fetch occupancy data");
+  return res.json();
 };
 
 export const getWeeklyPattern = async (): Promise<WeeklyPattern[]> => {
-  return Promise.resolve([
-    { day: "Mon", count: 35 },
-    { day: "Tue", count: 42 },
-    { day: "Wed", count: 38 },
-    { day: "Thu", count: 40 },
-    { day: "Fri", count: 28 },
-  ]);
+  const res = await fetch(`${API_BASE}/analytics/weekly-pattern`);
+  if (!res.ok) throw new Error("Failed to fetch weekly pattern");
+  return res.json();
 };

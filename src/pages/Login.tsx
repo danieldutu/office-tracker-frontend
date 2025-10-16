@@ -4,7 +4,7 @@ import { Building2, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { setCurrentUser } from "@/lib/api";
+import { login } from "@/lib/api";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -28,25 +28,11 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // For demo/testing: Use mock authentication
-      // In production, this would call the backend API
-      if (email === "admin@company.com" && password === "admin123") {
-        const mockUser = {
-          id: "1",
-          email,
-          name: "Admin User",
-          role: "admin" as const,
-          createdAt: new Date().toISOString(),
-        };
-        setCurrentUser(mockUser);
-        toast.success("Welcome back!");
-        navigate("/");
-      } else {
-        toast.error("Invalid email or password");
-        setIsLoading(false);
-      }
+      await login(email, password);
+      toast.success("Welcome back!");
+      navigate("/");
     } catch (error) {
-      toast.error("Failed to login. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to login. Please try again.");
       setIsLoading(false);
     }
   };
