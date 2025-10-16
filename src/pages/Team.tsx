@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { UserAvatar } from "@/components/UserAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { User, AttendanceStatus, TeamMember } from "@/types";
@@ -46,6 +47,9 @@ export default function Team({ currentUser }: TeamProps) {
   const [teamsByChapterLead, setTeamsByChapterLead] = useState<any[]>([]);
   const [exportOption, setExportOption] = useState<string>("all");
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [selectedChapterLeads, setSelectedChapterLeads] = useState<string[]>([]);
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [showSelection, setShowSelection] = useState(false);
   const { toast } = useToast();
 
   const canAllocate = canAllocateAttendance(currentUser);
@@ -208,6 +212,41 @@ export default function Team({ currentUser }: TeamProps) {
     document.body.removeChild(link);
   };
 
+  const handleExportOptionChange = (value: string) => {
+    setExportOption(value);
+    // Show selection UI for options that need it
+    if (value === "by-chapter" || value === "each-chapter-lead" || value === "by-person") {
+      setShowSelection(true);
+      // Reset selections
+      setSelectedChapterLeads([]);
+      setSelectedPeople([]);
+    } else {
+      setShowSelection(false);
+    }
+  };
+
+  const toggleChapterLead = (leadId: string) => {
+    setSelectedChapterLeads(prev =>
+      prev.includes(leadId) ? prev.filter(id => id !== leadId) : [...prev, leadId]
+    );
+  };
+
+  const togglePerson = (personId: string) => {
+    setSelectedPeople(prev =>
+      prev.includes(personId) ? prev.filter(id => id !== personId) : [...prev, personId]
+    );
+  };
+
+  const selectAllChapterLeads = () => {
+    const allLeadIds = teamsByChapterLead.map(t => t.chapterLead.id);
+    setSelectedChapterLeads(allLeadIds);
+  };
+
+  const selectAllPeople = () => {
+    const allPeopleIds = teamMembers.map(m => m.id);
+    setSelectedPeople(allPeopleIds);
+  };
+
   const handleExportCSV = () => {
     if (!isTribeLead(currentUser)) {
       // Simple export for non-Tribe Leads
@@ -233,27 +272,45 @@ export default function Team({ currentUser }: TeamProps) {
         break;
 
       case "by-chapter":
-        // Export one file per chapter lead's team
-        teamsByChapterLead.forEach((team: any) => {
+        // Export selected chapter lead teams
+        if (selectedChapterLeads.length === 0) {
+          toast({
+            title: "Error",
+            description: "Please select at least one chapter lead team",
+            variant: "destructive",
+          });
+          return;
+        }
+        const selectedTeams = teamsByChapterLead.filter(t => selectedChapterLeads.includes(t.chapterLead.id));
+        selectedTeams.forEach((team: any) => {
           const chapterLeadName = team.chapterLead?.name || "No-Lead";
           const filename = `team-${chapterLeadName.replace(/\s+/g, "-")}-${weekStr}.csv`;
           generateCSV(team.members, filename);
         });
         toast({
           title: "Success",
-          description: `${teamsByChapterLead.length} files exported (one per chapter lead)`,
+          description: `${selectedTeams.length} files exported`,
         });
         break;
 
       case "by-person":
-        // Export one file per person
-        teamMembers.forEach((member) => {
+        // Export selected people
+        if (selectedPeople.length === 0) {
+          toast({
+            title: "Error",
+            description: "Please select at least one person",
+            variant: "destructive",
+          });
+          return;
+        }
+        const selectedMembers = teamMembers.filter(m => selectedPeople.includes(m.id));
+        selectedMembers.forEach((member) => {
           const filename = `person-${member.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
           generateCSV([member], filename);
         });
         toast({
           title: "Success",
-          description: `${teamMembers.length} files exported (one per person)`,
+          description: `${selectedMembers.length} files exported`,
         });
         break;
 
@@ -268,15 +325,23 @@ export default function Team({ currentUser }: TeamProps) {
         break;
 
       case "each-chapter-lead":
-        // Export one file per chapter lead (their own record only)
-        const leads = teamMembers.filter(m => m.role === "CHAPTER_LEAD");
-        leads.forEach((lead) => {
+        // Export selected chapter leads individually
+        if (selectedChapterLeads.length === 0) {
+          toast({
+            title: "Error",
+            description: "Please select at least one chapter lead",
+            variant: "destructive",
+          });
+          return;
+        }
+        const selectedLeads = teamMembers.filter(m => selectedChapterLeads.includes(m.id));
+        selectedLeads.forEach((lead) => {
           const filename = `chapter-lead-${lead.name.replace(/\s+/g, "-")}-${weekStr}.csv`;
           generateCSV([lead], filename);
         });
         toast({
           title: "Success",
-          description: `${leads.length} files exported (one per chapter lead)`,
+          description: `${selectedLeads.length} files exported`,
         });
         break;
 
@@ -285,6 +350,9 @@ export default function Team({ currentUser }: TeamProps) {
     }
 
     setIsExportDialogOpen(false);
+    setShowSelection(false);
+    setSelectedChapterLeads([]);
+    setSelectedPeople([]);
   };
 
   return (
@@ -396,7 +464,7 @@ export default function Team({ currentUser }: TeamProps) {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
-                    <RadioGroup value={exportOption} onValueChange={setExportOption}>
+                    <RadioGroup value={exportOption} onValueChange={handleExportOptionChange}>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="all" id="all" />
                         <Label htmlFor="all" className="cursor-pointer">
@@ -412,7 +480,7 @@ export default function Team({ currentUser }: TeamProps) {
                         <Label htmlFor="by-chapter" className="cursor-pointer">
                           <div className="font-medium">By Chapter Lead Team</div>
                           <div className="text-xs text-muted-foreground">
-                            One file per chapter lead's team ({teamsByChapterLead.length} files)
+                            Select teams to export
                           </div>
                         </Label>
                       </div>
@@ -422,7 +490,7 @@ export default function Team({ currentUser }: TeamProps) {
                         <Label htmlFor="by-person" className="cursor-pointer">
                           <div className="font-medium">By Person</div>
                           <div className="text-xs text-muted-foreground">
-                            One file per person ({teamMembers.length} files)
+                            Select people to export individually
                           </div>
                         </Label>
                       </div>
@@ -442,15 +510,70 @@ export default function Team({ currentUser }: TeamProps) {
                         <Label htmlFor="each-chapter-lead" className="cursor-pointer">
                           <div className="font-medium">Each Chapter Lead Individually</div>
                           <div className="text-xs text-muted-foreground">
-                            One file per chapter lead ({teamMembers.filter(m => m.role === "CHAPTER_LEAD").length} files)
+                            Select chapter leads to export
                           </div>
                         </Label>
                       </div>
                     </RadioGroup>
 
+                    {/* Selection UI for chapter leads */}
+                    {showSelection && (exportOption === "by-chapter" || exportOption === "each-chapter-lead") && (
+                      <div className="border rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-semibold">Select Chapter Leads:</Label>
+                          <Button variant="ghost" size="sm" onClick={selectAllChapterLeads}>
+                            Select All
+                          </Button>
+                        </div>
+                        {teamsByChapterLead.map((team: any) => (
+                          <div key={team.chapterLead.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`lead-${team.chapterLead.id}`}
+                              checked={selectedChapterLeads.includes(team.chapterLead.id)}
+                              onCheckedChange={() => toggleChapterLead(team.chapterLead.id)}
+                            />
+                            <Label htmlFor={`lead-${team.chapterLead.id}`} className="cursor-pointer font-normal">
+                              {team.chapterLead.name} ({team.members.length} members)
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Selection UI for people */}
+                    {showSelection && exportOption === "by-person" && (
+                      <div className="border rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-semibold">Select People:</Label>
+                          <Button variant="ghost" size="sm" onClick={selectAllPeople}>
+                            Select All
+                          </Button>
+                        </div>
+                        <Input
+                          placeholder="Search people..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="mb-2"
+                        />
+                        {filteredMembers.map((member) => (
+                          <div key={member.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`person-${member.id}`}
+                              checked={selectedPeople.includes(member.id)}
+                              onCheckedChange={() => togglePerson(member.id)}
+                            />
+                            <Label htmlFor={`person-${member.id}`} className="cursor-pointer font-normal">
+                              {member.name} ({member.role})
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <Button className="w-full" onClick={handleExportCSV}>
                       <FileDown className="h-4 w-4 mr-2" />
-                      Export
+                      Export {showSelection && (exportOption === "by-chapter" || exportOption === "each-chapter-lead") && selectedChapterLeads.length > 0 && `(${selectedChapterLeads.length})`}
+                      {showSelection && exportOption === "by-person" && selectedPeople.length > 0 && `(${selectedPeople.length})`}
                     </Button>
                   </div>
                 </DialogContent>
