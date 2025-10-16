@@ -15,8 +15,8 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !email.includes("@")) {
-      toast.error("Please enter a valid email address");
+    if (!email) {
+      toast.error("Please enter your username or email");
       return;
     }
 
@@ -28,7 +28,9 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      // Automatically append @company.com if not present
+      const fullEmail = email.includes("@") ? email : `${email}@company.com`;
+      await login(fullEmail, password);
       toast.success("Welcome back!");
       // Force a full page reload to trigger App.tsx to check auth
       window.location.href = "/";
@@ -48,7 +50,7 @@ export default function Login() {
                 <Building2 className="h-8 w-8 text-primary" />
               </div>
             </div>
-            <h1 className="text-3xl font-bold">Office Tracker</h1>
+            <h1 className="text-3xl font-bold">ING Hubs Dacia One Office - Analytics Area</h1>
             <p className="text-muted-foreground">Track your team's office presence</p>
           </div>
 
@@ -61,8 +63,8 @@ export default function Login() {
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
                   id="email"
-                  type="email"
-                  placeholder="admin@company.com"
+                  type="text"
+                  placeholder="andreea.mihailescu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10"
@@ -98,7 +100,7 @@ export default function Login() {
 
           <div className="text-center text-xs text-muted-foreground">
             <p>Demo credentials:</p>
-            <p className="font-mono mt-1">admin@company.com / admin123</p>
+            <p className="font-mono mt-1">admin / admin123</p>
           </div>
         </div>
       </div>

@@ -29,16 +29,18 @@ export default function Calendar({ currentUser }: CalendarProps) {
   const loadMonthAttendance = async () => {
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
-    
+
     const records = await getAttendance({
       userId: currentUser.id,
       startDate: format(start, "yyyy-MM-dd"),
       endDate: format(end, "yyyy-MM-dd"),
     });
-    
+
     const attendanceMap: Record<string, AttendanceRecord> = {};
     records.forEach(record => {
-      attendanceMap[record.date] = record;
+      // Normalize date to YYYY-MM-DD format
+      const dateKey = format(new Date(record.date), "yyyy-MM-dd");
+      attendanceMap[dateKey] = record;
     });
     setAttendance(attendanceMap);
   };
@@ -78,11 +80,16 @@ export default function Calendar({ currentUser }: CalendarProps) {
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-  
-  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+
+  const allCalendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  // Filter to show only weekdays (Monday-Friday)
+  const calendarDays = allCalendarDays.filter(day => {
+    const dayOfWeek = day.getDay();
+    return dayOfWeek >= 1 && dayOfWeek <= 5; // 1=Monday, 5=Friday
+  });
+  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
   const statusOptions: { status: AttendanceStatus; label: string }[] = [
     { status: "office", label: "Office" },
@@ -127,7 +134,7 @@ export default function Calendar({ currentUser }: CalendarProps) {
 
         <Card>
           <CardContent className="p-6">
-            <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-5 gap-px bg-border rounded-lg overflow-hidden">
               {/* Week day headers */}
               {weekDays.map(day => (
                 <div key={day} className="bg-muted p-3 text-center font-semibold text-sm">

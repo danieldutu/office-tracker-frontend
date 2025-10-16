@@ -28,6 +28,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { User, AttendanceStatus, TeamMember } from "@/types";
 import { getMyTeam, allocateAttendance } from "@/lib/api";
 import { canAllocateAttendance, getRoleName, getRoleColor, isTribeLead, isReporter } from "@/lib/permissions";
+import { formatEmail } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface TeamProps {
@@ -95,7 +96,9 @@ export default function Team({ currentUser }: TeamProps) {
         if (member.attendance) {
           attendanceMap[member.id] = {};
           member.attendance.forEach((record) => {
-            attendanceMap[member.id][record.date] = record.status;
+            // Normalize date to YYYY-MM-DD format
+            const dateKey = format(new Date(record.date), "yyyy-MM-dd");
+            attendanceMap[member.id][dateKey] = record.status;
           });
         }
       });
@@ -205,7 +208,7 @@ export default function Team({ currentUser }: TeamProps) {
 
       return [
         member.name,
-        member.email,
+        formatEmail(member.email),
         member.role,
         member.teamName || "-",
         ...dateStatuses,
@@ -910,7 +913,7 @@ export default function Team({ currentUser }: TeamProps) {
                           <UserAvatar name={member.name} avatar={member.avatarUrl} size="sm" />
                           <div>
                             <div className="font-medium">{member.name}</div>
-                            <div className="text-xs text-muted-foreground">{member.email}</div>
+                            <div className="text-xs text-muted-foreground">{formatEmail(member.email)}</div>
                             {isTribeLead(currentUser) && member.teamName && (
                               <Badge className="text-xs mt-1" variant="outline">
                                 {member.teamName}

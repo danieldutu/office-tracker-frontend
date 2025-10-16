@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, formatEmail } from "@/lib/utils";
 import { User as UserType } from "@/types";
 import { canAccessAdmin, canViewAnalytics, getRoleName, getRoleColor } from "@/lib/permissions";
 
@@ -46,7 +46,7 @@ export const Navigation = ({ currentUser, onLogout }: NavigationProps) => {
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2 font-bold text-xl">
               <Building2 className="h-6 w-6 text-primary" />
-              <span>Office Tracker</span>
+              <span>ING Hubs Dacia One Office - Analytics Area</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-1">
@@ -76,7 +76,7 @@ export const Navigation = ({ currentUser, onLogout }: NavigationProps) => {
               <DropdownMenuContent align="end" className="w-56 bg-popover">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{currentUser.name}</p>
-                  <p className="text-xs text-muted-foreground">{currentUser.email}</p>
+                  <p className="text-xs text-muted-foreground">{formatEmail(currentUser.email)}</p>
                   <Badge className={cn("text-xs mt-1", getRoleColor(currentUser.role))}>
                     {getRoleName(currentUser.role)}
                   </Badge>

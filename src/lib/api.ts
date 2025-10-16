@@ -174,8 +174,20 @@ export const getAttendance = async (params?: {
 };
 
 // Analytics
-export const getAnalyticsOverview = async (): Promise<AttendanceStats> => {
-  const res = await fetch(`${API_BASE}/analytics/overview`, {
+export const getAnalyticsOverview = async (params?: {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  chapterLeadId?: string;
+}): Promise<AttendanceStats> => {
+  const queryParams = new URLSearchParams();
+  if (params?.startDate) queryParams.set("startDate", params.startDate);
+  if (params?.endDate) queryParams.set("endDate", params.endDate);
+  if (params?.userId) queryParams.set("userId", params.userId);
+  if (params?.chapterLeadId) queryParams.set("chapterLeadId", params.chapterLeadId);
+
+  const url = `${API_BASE}/analytics/overview${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  const res = await fetch(url, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch analytics overview");
@@ -183,10 +195,17 @@ export const getAnalyticsOverview = async (): Promise<AttendanceStats> => {
   return result.data || result;
 };
 
-export const getOccupancyData = async (startDate?: string, endDate?: string): Promise<OccupancyData[]> => {
+export const getOccupancyData = async (params?: {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  chapterLeadId?: string;
+}): Promise<OccupancyData[]> => {
   const queryParams = new URLSearchParams();
-  if (startDate) queryParams.set("startDate", startDate);
-  if (endDate) queryParams.set("endDate", endDate);
+  if (params?.startDate) queryParams.set("startDate", params.startDate);
+  if (params?.endDate) queryParams.set("endDate", params.endDate);
+  if (params?.userId) queryParams.set("userId", params.userId);
+  if (params?.chapterLeadId) queryParams.set("chapterLeadId", params.chapterLeadId);
 
   const url = `${API_BASE}/analytics/occupancy${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
   const res = await fetch(url, {
@@ -198,8 +217,20 @@ export const getOccupancyData = async (startDate?: string, endDate?: string): Pr
   return result.data || result;
 };
 
-export const getWeeklyPattern = async (): Promise<WeeklyPattern[]> => {
-  const res = await fetch(`${API_BASE}/analytics/weekly-pattern`, {
+export const getWeeklyPattern = async (params?: {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  chapterLeadId?: string;
+}): Promise<WeeklyPattern[]> => {
+  const queryParams = new URLSearchParams();
+  if (params?.startDate) queryParams.set("startDate", params.startDate);
+  if (params?.endDate) queryParams.set("endDate", params.endDate);
+  if (params?.userId) queryParams.set("userId", params.userId);
+  if (params?.chapterLeadId) queryParams.set("chapterLeadId", params.chapterLeadId);
+
+  const url = `${API_BASE}/analytics/weekly-pattern${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  const res = await fetch(url, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch weekly pattern");
@@ -213,6 +244,56 @@ export const getMyTeam = async (): Promise<MyTeamResponse> => {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch team");
+  const result = await res.json();
+  return result.data || result;
+};
+
+// Delegation Management
+export const createDelegation = async (data: {
+  delegateId: string;
+  startDate: string;
+  endDate: string;
+}): Promise<any> => {
+  const res = await fetch(`${API_BASE}/delegations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create delegation");
+  const result = await res.json();
+  return result.data || result;
+};
+
+export const getDelegations = async (): Promise<any[]> => {
+  const res = await fetch(`${API_BASE}/delegations`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch delegations");
+  const result = await res.json();
+  return result.data || result;
+};
+
+export const revokeDelegation = async (id: string): Promise<any> => {
+  const res = await fetch(`${API_BASE}/delegations?id=${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to revoke delegation");
+  const result = await res.json();
+  return result.data || result;
+};
+
+export const getActiveDelegation = async (): Promise<{
+  hasActiveDelegation: boolean;
+  delegation: any;
+}> => {
+  const res = await fetch(`${API_BASE}/delegations/active`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to check delegation");
   const result = await res.json();
   return result.data || result;
 };
@@ -231,6 +312,31 @@ export const getDirectReports = async (userId: string): Promise<any> => {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Failed to fetch direct reports");
+  const result = await res.json();
+  return result.data || result;
+};
+
+// Office Capacity
+export const getOfficeCapacity = async (): Promise<{
+  weekData: Array<{
+    day: string;
+    date: string;
+    capacity: number;
+    booked: number;
+    available: number;
+    isOverbooked: boolean;
+    utilizationPercent: number;
+  }>;
+  capacitySettings: Array<{
+    id: string;
+    dayOfWeek: string;
+    capacity: number;
+  }>;
+}> => {
+  const res = await fetch(`${API_BASE}/office-capacity`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch office capacity");
   const result = await res.json();
   return result.data || result;
 };

@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { User, AttendanceRecord } from "@/types";
 import { updateUser, getAttendance } from "@/lib/api";
+import { formatEmail } from "@/lib/utils";
 
 interface ProfileProps {
   currentUser: User;
@@ -73,7 +74,7 @@ export default function Profile({ currentUser, onUpdate }: ProfileProps) {
               </div>
               <div className="text-center md:text-left">
                 <h2 className="text-2xl font-bold">{currentUser.name}</h2>
-                <p className="text-muted-foreground">{currentUser.email}</p>
+                <p className="text-muted-foreground">{formatEmail(currentUser.email)}</p>
                 <div className="mt-2">
                   <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-sm font-medium rounded-full">
                     {currentUser.role === "admin" ? "Administrator" : "Team Member"}
@@ -108,7 +109,7 @@ export default function Profile({ currentUser, onUpdate }: ProfileProps) {
               </label>
               <Input
                 id="email"
-                value={currentUser.email}
+                value={formatEmail(currentUser.email)}
                 disabled
                 className="bg-muted"
               />

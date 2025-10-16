@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { format, startOfWeek, addDays } from "date-fns";
-import { Building2, Home, XCircle, TrendingUp, User as UserIcon, Info } from "lucide-react";
+import { Building2, Home, XCircle, TrendingUp, User as UserIcon, Info, CalendarCheck, AlertTriangle } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AttendanceStatus, User } from "@/types";
-import { createAttendance, getAttendance, getUsers, getMyTeam } from "@/lib/api";
+import { createAttendance, getAttendance, getUsers, getMyTeam, getOfficeCapacity } from "@/lib/api";
 import { isReporter, canAllocateAttendance } from "@/lib/permissions";
 
 interface DashboardProps {
@@ -23,17 +24,29 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [weekAttendance, setWeekAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [teamInOffice, setTeamInOffice] = useState<User[]>([]);
   const [chapterLeadName, setChapterLeadName] = useState("");
+  const [officeCapacity, setOfficeCapacity] = useState<any>(null);
+  const [monthlyStats, setMonthlyStats] = useState({
+    officeDays: 0,
+    remoteDays: 0,
+    attendanceRate: 0,
+  });
   const today = format(new Date(), "yyyy-MM-dd");
 
   const isUserReporter = isReporter(currentUser);
   const isTribeLeadUser = currentUser.role === "TRIBE_LEAD";
+  const isChapterLead = currentUser.role === "CHAPTER_LEAD";
+  const canViewCapacity = isTribeLeadUser || isChapterLead;
 
   useEffect(() => {
     loadTodayStatus();
     loadWeekAttendance();
     loadTeamStatus();
+    loadMonthlyStats();
     if (!isTribeLeadUser) {
       loadChapterLead();
+    }
+    if (canViewCapacity) {
+      loadOfficeCapacity();
     }
   }, [currentUser.id]);
 
@@ -56,10 +69,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       startDate: format(weekStart, "yyyy-MM-dd"),
       endDate: format(addDays(weekStart, 6), "yyyy-MM-dd"),
     });
-    
+
     const attendance: Record<string, AttendanceStatus> = {};
     records.forEach(record => {
-      attendance[record.date] = record.status;
+      // Normalize date to YYYY-MM-DD format
+      const dateKey = format(new Date(record.date), "yyyy-MM-dd");
+      attendance[dateKey] = record.status;
     });
     setWeekAttendance(attendance);
   };
@@ -98,9 +113,69 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
+  const loadOfficeCapacity = async () => {
+    try {
+      const data = await getOfficeCapacity();
+      setOfficeCapacity(data);
+    } catch (error) {
+      console.error("Error loading office capacity:", error);
+    }
+  };
+
+  const loadMonthlyStats = async () => {
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const endOfMonth = new Date();
+      endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+      endOfMonth.setDate(0);
+      endOfMonth.setHours(23, 59, 59, 999);
+
+      const records = await getAttendance({
+        userId: currentUser.id,
+        startDate: format(startOfMonth, "yyyy-MM-dd"),
+        endDate: format(endOfMonth, "yyyy-MM-dd"),
+      });
+
+      // Filter to only working days (Monday-Friday)
+      const workingDayRecords = records.filter(r => {
+        const date = new Date(r.date);
+        const dayOfWeek = date.getDay();
+        return dayOfWeek >= 1 && dayOfWeek <= 5; // 1=Monday, 5=Friday
+      });
+
+      const officeDays = workingDayRecords.filter(r => r.status === "office").length;
+      const remoteDays = workingDayRecords.filter(r => r.status === "remote").length;
+
+      // Calculate working days passed this month
+      const today = new Date();
+      let workingDaysPassed = 0;
+      for (let d = 1; d <= today.getDate(); d++) {
+        const date = new Date(today.getFullYear(), today.getMonth(), d);
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          workingDaysPassed++;
+        }
+      }
+
+      const totalDays = workingDayRecords.length;
+      const attendanceRate = workingDaysPassed > 0 ? Math.round((totalDays / workingDaysPassed) * 100) : 0;
+
+      setMonthlyStats({
+        officeDays,
+        remoteDays,
+        attendanceRate: Math.min(attendanceRate, 100),
+      });
+    } catch (error) {
+      console.error("Error loading monthly stats:", error);
+    }
+  };
+
   const handleStatusSelect = async (status: AttendanceStatus) => {
     setSelectedStatus(status);
-    
+
     try {
       await createAttendance({
         userId: currentUser.id,
@@ -108,10 +183,14 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         status,
         notes,
       });
-      
+
       toast.success("Status updated successfully!");
       loadWeekAttendance();
       loadTeamStatus();
+      loadMonthlyStats();
+      if (canViewCapacity) {
+        loadOfficeCapacity();
+      }
     } catch (error) {
       toast.error("Failed to update status");
     }
@@ -251,6 +330,118 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           </CardContent>
         </Card>
 
+        {/* Office Capacity Widget - Only for Chapter Leads and Tribe Lead */}
+        {canViewCapacity && officeCapacity && (
+          <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-background">
+            <CardHeader>
+              <CardTitle className="text-center text-2xl flex items-center justify-center gap-2">
+                <CalendarCheck className="h-6 w-6 text-green-600" />
+                Office Capacity This Week
+              </CardTitle>
+              <p className="text-center text-sm text-muted-foreground">
+                Real-time office occupancy to prevent overbooking
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                {officeCapacity.weekData.map((day: any) => (
+                  <div
+                    key={day.date}
+                    className={cn(
+                      "p-4 rounded-lg border-2 transition-all",
+                      day.isOverbooked
+                        ? "border-red-300 bg-red-50"
+                        : day.available <= 5
+                        ? "border-amber-300 bg-amber-50"
+                        : "border-green-300 bg-green-50"
+                    )}
+                  >
+                    <div className="space-y-3">
+                      {/* Day Header */}
+                      <div className="text-center">
+                        <div className="font-semibold text-sm">{day.day}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(day.date), "MMM d")}
+                        </div>
+                      </div>
+
+                      {/* Capacity Stats */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Capacity:</span>
+                          <span className="font-semibold">{day.capacity}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Booked:</span>
+                          <span className="font-semibold">{day.booked}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Available:</span>
+                          <span className={cn(
+                            "font-bold",
+                            day.isOverbooked ? "text-red-600" : day.available <= 5 ? "text-amber-600" : "text-green-600"
+                          )}>
+                            {day.isOverbooked ? "FULL" : day.available}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="space-y-1">
+                        <Progress
+                          value={Math.min(day.utilizationPercent, 100)}
+                          className={cn(
+                            "h-2",
+                            day.isOverbooked ? "[&>div]:bg-red-500" :
+                            day.utilizationPercent >= 80 ? "[&>div]:bg-amber-500" :
+                            "[&>div]:bg-green-500"
+                          )}
+                        />
+                        <div className="text-center text-xs font-medium">
+                          {day.utilizationPercent}%
+                        </div>
+                      </div>
+
+                      {/* Warning Badge */}
+                      {day.isOverbooked && (
+                        <div className="flex items-center justify-center gap-1 text-xs text-red-600 font-semibold">
+                          <AlertTriangle className="h-3 w-3" />
+                          Overbooked
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {officeCapacity.weekData.reduce((sum: number, day: any) => sum + day.available, 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Total Available Spots</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {officeCapacity.weekData.reduce((sum: number, day: any) => sum + day.booked, 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Total Bookings</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {Math.round(
+                      officeCapacity.weekData.reduce((sum: number, day: any) => sum + day.utilizationPercent, 0) /
+                      officeCapacity.weekData.length
+                    )}%
+                  </div>
+                  <div className="text-xs text-muted-foreground">Avg. Utilization</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Team Summary */}
         <Card>
           <CardHeader>
@@ -286,7 +477,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Days in Office</p>
-                  <p className="text-3xl font-bold">8</p>
+                  <p className="text-3xl font-bold">{monthlyStats.officeDays}</p>
                 </div>
                 <Building2 className="h-10 w-10 text-status-office opacity-20" />
               </div>
@@ -298,7 +489,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Remote Days</p>
-                  <p className="text-3xl font-bold">12</p>
+                  <p className="text-3xl font-bold">{monthlyStats.remoteDays}</p>
                 </div>
                 <Home className="h-10 w-10 text-status-remote opacity-20" />
               </div>
@@ -311,8 +502,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 <div>
                   <p className="text-sm text-muted-foreground">Attendance Rate</p>
                   <p className="text-3xl font-bold flex items-center gap-2">
-                    95%
-                    <TrendingUp className="h-5 w-5 text-success" />
+                    {monthlyStats.attendanceRate}%
+                    {monthlyStats.attendanceRate > 0 && (
+                      <TrendingUp className="h-5 w-5 text-success" />
+                    )}
                   </p>
                 </div>
               </div>
