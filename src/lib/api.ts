@@ -1,7 +1,7 @@
 import { User, AttendanceRecord, AttendanceStats, OccupancyData, WeeklyPattern } from "@/types";
 
-// Mock API service - Replace with actual API calls
-const API_BASE = "/api";
+// Production API URL
+const API_BASE = "https://office-tracker-backend-4zt3.vercel.app/api";
 
 // Mock data for development
 const mockUsers: User[] = [
