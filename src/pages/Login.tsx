@@ -30,7 +30,8 @@ export default function Login() {
     try {
       await login(email, password);
       toast.success("Welcome back!");
-      navigate("/");
+      // Force a full page reload to trigger App.tsx to check auth
+      window.location.href = "/";
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to login. Please try again.");
       setIsLoading(false);
